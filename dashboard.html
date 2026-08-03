@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة إدارة المتدربين | قسم التدريب والتطوير المهني</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+  <header class="app-topbar">
+    <div class="brand">
+      <div class="brand-mark">ت</div>
+      <div class="brand-text">
+        <h1>قسم التدريب والتطوير المهني</h1>
+        <span>نظام تسجيل وإدارة المتدربين</span>
+      </div>
+    </div>
+    <nav class="topbar-nav">
+      <a href="index.html">تسجيل متدرب</a>
+      <a href="dashboard.html" class="active">لوحة الإدارة</a>
+    </nav>
+  </header>
+
+  <main class="dash-wrap">
+
+    <div class="dash-head">
+      <div>
+        <h2>لوحة إدارة المتدربين</h2>
+        <p>نظرة عامة على الأقسام والمتدربين المسجلين حالياً</p>
+      </div>
+      <button class="btn-export" id="exportBtn">
+        <span>⬇</span> تحميل Excel
+      </button>
+    </div>
+
+    <div class="section-toolbar">
+      <h3>الأقسام المسجَّلة</h3>
+      <button class="btn-showall active" id="showAllBtn">عرض الكل</button>
+    </div>
+    <div class="category-chip-row" id="categoryChipRow"></div>
+    <div class="dept-grid" id="deptGrid">
+      <!-- تُملأ ديناميكياً بواسطة departments.js / dashboard.js -->
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+    </div>
+
+    <div class="filters-panel">
+      <h3>البحث والتصفية</h3>
+      <div class="filters-grid">
+        <div class="f-field">
+          <label>اسم الطالب</label>
+          <input type="text" id="f_name" placeholder="ابحث بالاسم">
+        </div>
+        <div class="f-field">
+          <label>رقم الهاتف</label>
+          <input type="text" id="f_phone" placeholder="ابحث برقم الهاتف">
+        </div>
+        <div class="f-field">
+          <label>التخصص</label>
+          <input type="text" id="f_spec" placeholder="ابحث بالتخصص">
+        </div>
+        <div class="f-field">
+          <label>الفئة الرئيسية</label>
+          <select id="f_category"><option value="">جميع الفئات</option></select>
+        </div>
+        <div class="f-field">
+          <label>القسم</label>
+          <select id="f_department"><option value="">جميع الأقسام</option></select>
+        </div>
+        <div class="f-field">
+          <label>تاريخ بداية التدريب</label>
+          <input type="date" id="f_start">
+        </div>
+        <div class="f-field">
+          <label>تاريخ نهاية التدريب</label>
+          <input type="date" id="f_end">
+        </div>
+        <div class="f-field">
+          <label>تاريخ التسجيل</label>
+          <input type="date" id="f_regdate">
+        </div>
+        <div class="f-field">
+          <label>حالة التدريب</label>
+          <select id="f_status">
+            <option value="">جميع الحالات</option>
+            <option value="active">الطلاب الحاليين (قيد التدريب)</option>
+            <option value="upcoming">التدريبات القادمة</option>
+            <option value="ended">التدريبات المنتهية</option>
+          </select>
+        </div>
+      </div>
+      <div class="filters-actions">
+        <button class="btn-reset" id="resetFiltersBtn">إعادة تعيين</button>
+      </div>
+    </div>
+
+    <div class="table-panel">
+      <div class="table-scroll-hint" id="tableScrollHint">↔ مرر أفقياً لعرض كل أعمدة الجدول</div>
+      <div class="table-scroll">
+        <table class="students-table" id="studentsTable">
+          <thead>
+            <tr>
+              <th data-sort="student_name">اسم الطالب <span class="sort-arrow">↕</span></th>
+              <th data-sort="phone">رقم الهاتف <span class="sort-arrow">↕</span></th>
+              <th data-sort="specialization">التخصص <span class="sort-arrow">↕</span></th>
+              <th data-sort="department">القسم <span class="sort-arrow">↕</span></th>
+              <th data-sort="training_start">بداية التدريب <span class="sort-arrow">↕</span></th>
+              <th data-sort="training_end">نهاية التدريب <span class="sort-arrow">↕</span></th>
+              <th>مدة التدريب</th>
+              <th data-sort="registration_date">تاريخ التسجيل <span class="sort-arrow">↕</span></th>
+              <th>الحالة</th>
+              <th>التقرير</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <!-- تُملأ ديناميكياً -->
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/departments.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/excel.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+# لا تقم برفع بيانات الاتصال الفعلية بـ Supabase
+js/config.js
+
+# ملفات نظام التشغيل
+.DS_Store
+Thumbs.db
