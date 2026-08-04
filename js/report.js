@@ -6,7 +6,7 @@
 
 const MINISTRY_NAME = "وزارة الصحة";
 const HOSPITAL_NAME = "مستشفى إبراء";
-const HOSPITAL_SUBTITLE = "قسم التدريب والتطوير المهني";
+const HOSPITAL_SUBTITLE = "قسم التطوير والتوجيه المهني";
 
 function buildReportHTML(group){
   const sortedRecords = group.records
