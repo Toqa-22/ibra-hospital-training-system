@@ -88,6 +88,8 @@ select:focus-visible,
   font-weight:800;font-size:18px;
   border:1px solid rgba(255,255,255,0.25);
   flex-shrink:0;
+  object-fit:contain;
+  padding:5px;
 }
 .app-topbar .brand-text{ min-width:0; }
 .app-topbar .brand-text h1{
