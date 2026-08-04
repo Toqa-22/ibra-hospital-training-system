@@ -83,6 +83,7 @@ async function insertStudentsWithPeriods(base, items){
     student_name: base.student_name.trim(),
     phone: String(base.phone).trim(),
     specialization: base.specialization.trim(),
+    college: (base.college || "").trim() || null,
     department: item.department.trim(),
     training_start: item.start,
     training_end: item.end,
