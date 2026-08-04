@@ -45,19 +45,6 @@
 .section-toolbar h3{
   margin:0; font-size:15px; font-weight:800; color: var(--primary-dark);
 }
-.btn-showall{
-  background: var(--primary-light);
-  color: var(--primary-dark);
-  border:1.5px solid transparent;
-  padding: 9px 18px;
-  border-radius: 999px;
-  font-weight:800;
-  font-size:12.8px;
-  cursor:pointer;
-  transition: all var(--transition);
-}
-.btn-showall:hover{ border-color: var(--primary); }
-.btn-showall.active{ background: var(--primary); color:#fff; }
 
 /* ===== بطاقات الأقسام ===== */
 .dept-grid{
@@ -222,7 +209,7 @@
 table.students-table{
   width:100%;
   border-collapse: collapse;
-  min-width: 1000px;
+  min-width: 1150px;
 }
 .students-table thead th{
   position: sticky; top:0;
@@ -360,7 +347,30 @@ table.students-table{
   transition: background var(--transition), transform var(--transition);
   white-space:nowrap;
 }
+.actions-cell{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+}
+
 .btn-report:hover{ background: var(--primary); color:#fff; transform: translateY(-1px); }
+
+.btn-delete{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background: var(--danger-light);
+  color: var(--danger);
+  border: none;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  font-weight:800;
+  font-size:12px;
+  cursor:pointer;
+  transition: background var(--transition), transform var(--transition);
+  white-space:nowrap;
+}
+.btn-delete:hover{ background: var(--danger); color:#fff; transform: translateY(-1px); }
 
 .table-empty{
   text-align:center;
@@ -382,7 +392,6 @@ table.students-table{
 
 @media (max-width: 640px){
   .section-toolbar{ flex-wrap:wrap; gap:10px; }
-  .btn-showall{ width:100%; text-align:center; }
   .filters-panel{ padding:16px; }
   .dept-card{ padding:14px; }
   .dept-card .dept-name{ font-size:13px; min-height:auto; }
