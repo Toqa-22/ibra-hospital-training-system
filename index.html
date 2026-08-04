@@ -13,7 +13,7 @@
 
   <header class="app-topbar">
     <div class="brand">
-      <div class="brand-mark">ت</div>
+      <img class="brand-mark" src="assets/logo.png" alt="شعار المستشفى" onerror="handleLogoImgError(this)">
       <div class="brand-text">
         <h1>وزارة الصحة - مستشفى إبراء - قسم التطوير والتوجيه المهني</h1>
         <span>نظام تسجيل وإدارة المتدربين</span>
@@ -54,10 +54,9 @@
               <div class="error-msg">هذا الحقل مطلوب</div>
             </div>
 
-            <div class="field" data-field="specialization1">
-              <label>الكلية / الجامعة<span class="req">*</span></label>
+            <div class="field full">
+              <label>الكلية / الجامعة</label>
               <input type="text" id="college" placeholder="مثال: جامعة السلطان قابوس" autocomplete="off">
-              <div class="error-msg">هذا الحقل مطلوب</div>
             </div>
 
             <div class="field full" data-field="department">
