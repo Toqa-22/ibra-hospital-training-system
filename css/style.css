@@ -82,14 +82,23 @@ select:focus-visible,
   min-width:0;
 }
 .app-topbar .brand-mark{
-  width:42px;height:42px;border-radius:12px;
-  background: rgba(255,255,255,0.15);
-  display:flex;align-items:center;justify-content:center;
-  font-weight:800;font-size:18px;
-  border:1px solid rgba(255,255,255,0.25);
+  width:60px;height:60px;
   flex-shrink:0;
+}
+.app-topbar img.brand-mark{
   object-fit:contain;
-  padding:5px;
+  background:transparent;
+  border:none;
+  border-radius:0;
+  padding:0;
+  image-rendering:-webkit-optimize-contrast;
+}
+.app-topbar div.brand-mark{
+  border-radius:12px;
+  background: rgba(255,255,255,0.15);
+  border:1px solid rgba(255,255,255,0.25);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:22px;
 }
 .app-topbar .brand-text{ min-width:0; }
 .app-topbar .brand-text h1{
@@ -691,7 +700,8 @@ select:focus-visible,
 /* هواتف صغيرة ومتوسطة */
 @media (max-width: 480px){
   .app-topbar{ padding:10px 14px; }
-  .app-topbar .brand-mark{ width:36px; height:36px; font-size:15px; border-radius:10px; }
+  .app-topbar .brand-mark{ width:46px; height:46px; }
+  .app-topbar div.brand-mark{ font-size:17px; border-radius:10px; }
   .topbar-nav a{ padding:7px 12px; font-size:12.5px; }
 
   .eyebrow{ font-size:11.5px; }
