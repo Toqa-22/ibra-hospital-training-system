@@ -113,7 +113,6 @@ function renderDepartmentCards(){
       const dept = card.dataset.dept;
       state.activeDepartment = state.activeDepartment === dept ? "" : dept;
       document.getElementById("f_department").value = state.activeDepartment;
-      document.getElementById("showAllBtn").classList.toggle("active", state.activeDepartment === "");
       state.page = 1;
       renderDepartmentCards();
       renderTable();
@@ -137,18 +136,9 @@ function populateDepartmentFilterOptions(){
 }
 
 // ---------------------------------------------------------------------------
-// الأحداث الثابتة (الفلاتر، الفرز، التصدير، عرض الكل)
+// الأحداث الثابتة (الفلاتر، الفرز، التصدير)
 // ---------------------------------------------------------------------------
 function bindStaticEvents(){
-  document.getElementById("showAllBtn").addEventListener("click", () => {
-    state.activeDepartment = "";
-    document.getElementById("f_department").value = "";
-    document.getElementById("showAllBtn").classList.add("active");
-    state.page = 1;
-    renderDepartmentCards();
-    renderTable();
-  });
-
   const filterIds = ["f_name", "f_phone", "f_spec", "f_category", "f_department", "f_start", "f_end", "f_regdate", "f_status"];
   filterIds.forEach(id => {
     const el = document.getElementById(id);
@@ -161,7 +151,6 @@ function bindStaticEvents(){
       }
       if (id === "f_department"){
         state.activeDepartment = el.value;
-        document.getElementById("showAllBtn").classList.toggle("active", el.value === "");
         renderDepartmentCards();
       }
       state.page = 1;
@@ -175,7 +164,6 @@ function bindStaticEvents(){
     filterIds.forEach(id => { document.getElementById(id).value = ""; });
     state.activeDepartment = "";
     state.activeCategory = "";
-    document.getElementById("showAllBtn").classList.add("active");
     state.page = 1;
     renderCategoryChips();
     renderDepartmentCards();
@@ -259,7 +247,7 @@ function sortGroups(groups){
     const latest = group.records[0]; // الأحدث بعد الفرز أعلاه
     if (field === "student_name") return group.student_name || "";
     if (field === "phone") return group.phone || "";
-    if (["specialization", "department", "training_start", "training_end", "registration_date", "created_at"].includes(field)){
+    if (["specialization", "college", "department", "training_start", "training_end", "registration_date", "created_at"].includes(field)){
       return latest[field] || "";
     }
     return "";
@@ -285,7 +273,7 @@ function getGroupStatusSummary(records){
 // ---------------------------------------------------------------------------
 // رسم الجدول (مع الفرز، الترقيم، الصفوف القابلة للتوسيع، وزر التقرير)
 // ---------------------------------------------------------------------------
-const REPORT_COLSPAN = 10;
+const REPORT_COLSPAN = 11;
 
 function renderTable(){
   const filtered = getFilteredStudents();
@@ -309,7 +297,11 @@ function renderTable(){
   let html = "";
   pageGroups.forEach((group, gIdx) => {
     const groupId = `grp-${gIdx}`;
-    const reportBtn = `<button class="btn-report" data-report-idx="${gIdx}">⬇ تقرير</button>`;
+    const actionsCell = `
+      <div class="actions-cell">
+        <button class="btn-report" data-report-idx="${gIdx}">⬇ تقرير</button>
+        <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
+      </div>`;
 
     if (group.records.length === 1){
       const r = group.records[0];
@@ -318,6 +310,7 @@ function renderTable(){
         <tr>
           <td>${escapeHtml(group.student_name)}</td>
           <td>${escapeHtml(group.phone)}</td>
+          <td>${escapeHtml(r.college || "—")}</td>
           <td>${escapeHtml(r.specialization)}</td>
           <td>${escapeHtml(r.department)}</td>
           <td>${formatDateShort(r.training_start)}</td>
@@ -325,7 +318,7 @@ function renderTable(){
           <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
           <td>${formatDateShort(r.registration_date)}</td>
           <td><span class="status-pill ${status.cls}">${status.label}</span></td>
-          <td>${reportBtn}</td>
+          <td>${actionsCell}</td>
         </tr>`;
     } else {
       const starts = group.records.map(r => new Date(r.training_start));
@@ -340,7 +333,7 @@ function renderTable(){
             <span class="toggle-caret">▾</span>${escapeHtml(group.student_name)}
             <div class="group-subtext">${escapeHtml(group.phone)}</div>
           </td>
-          <td colspan="2">
+          <td colspan="3">
             <span class="count-badge">${group.records.length} أقسام</span>
             <span class="expand-hint">اضغط لعرض تفاصيل كل قسم ▾</span>
           </td>
@@ -348,13 +341,14 @@ function renderTable(){
           <td>يختلف حسب القسم</td>
           <td>${formatDateShort(group.records[0].registration_date)}</td>
           <td><span class="status-pill ${statusSummary.cls}">${statusSummary.label}</span></td>
-          <td>${reportBtn}</td>
+          <td>${actionsCell}</td>
         </tr>`;
       group.records.forEach(r => {
         const status = getTrainingStatus(r.training_start, r.training_end);
         html += `
           <tr class="sub-row hidden" data-parent="${groupId}">
             <td colspan="2"></td>
+            <td>${escapeHtml(r.college || "—")}</td>
             <td>${escapeHtml(r.specialization)}</td>
             <td>${escapeHtml(r.department)}</td>
             <td>${formatDateShort(r.training_start)}</td>
@@ -372,7 +366,7 @@ function renderTable(){
 
   tbody.querySelectorAll(".group-row").forEach(row => {
     row.addEventListener("click", (e) => {
-      if (e.target.closest(".btn-report")) return; // لا توسّع الصف عند الضغط على زر التقرير
+      if (e.target.closest(".btn-report") || e.target.closest(".btn-delete")) return; // لا توسّع الصف عند الضغط على أزرار الإجراءات
       const id = row.dataset.group;
       row.classList.toggle("expanded");
       tbody.querySelectorAll(`.sub-row[data-parent="${id}"]`).forEach(sr => sr.classList.toggle("hidden"));
@@ -387,7 +381,44 @@ function renderTable(){
     });
   });
 
+  tbody.querySelectorAll("[data-delete-idx]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.deleteIdx);
+      handleDeleteStudent(pageGroups[idx]);
+    });
+  });
+
   renderPagination(groups.length, totalPages);
+}
+
+// ---------------------------------------------------------------------------
+// حذف طالب (كل سجلاته عبر جميع الأقسام) بعد تأكيد صريح من المستخدم
+// ---------------------------------------------------------------------------
+async function handleDeleteStudent(group){
+  const multi = group.records.length > 1;
+  const confirmed = await showConfirm({
+    title: "حذف الطالب نهائياً",
+    text: multi
+      ? `سيتم حذف ${escapeHtml(group.student_name)} من جميع الأقسام (${group.records.length} سجلات). لا يمكن التراجع عن هذا الإجراء.`
+      : `سيتم حذف سجل ${escapeHtml(group.student_name)} نهائياً. لا يمكن التراجع عن هذا الإجراء.`,
+    confirmLabel: "حذف نهائياً",
+  });
+  if (!confirmed) return;
+
+  try {
+    const ids = group.records.map(r => r.id);
+    await deleteStudentsByIds(ids);
+    state.allStudents = state.allStudents.filter(s => !ids.includes(s.id));
+
+    showToast("تم حذف الطالب بنجاح", "success");
+    renderDepartmentCards();
+    populateDepartmentFilterOptions();
+    renderTable();
+  } catch (err){
+    console.error("فشل حذف الطالب:", err);
+    showToast("تعذر حذف الطالب، يرجى المحاولة مرة أخرى", "error");
+  }
 }
 
 function updateSortArrows(){
