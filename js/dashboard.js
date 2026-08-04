@@ -417,7 +417,7 @@ async function handleDeleteStudent(group){
     renderTable();
   } catch (err){
     console.error("فشل حذف الطالب:", err);
-    showToast("تعذر حذف الطالب، يرجى المحاولة مرة أخرى", "error");
+    showToast(describeSupabaseError(err, "تعذر حذف الطالب"), "error");
   }
 }
 
