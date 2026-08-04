@@ -221,6 +221,7 @@ function validateForm(){
   const name = document.getElementById("student_name").value.trim();
   const phone = document.getElementById("phone").value.trim();
   const specialization = document.getElementById("specialization").value.trim();
+  const college = document.getElementById("college").value.trim();
   const departments = Array.from(deptPickerState.selected);
 
   [
@@ -250,7 +251,38 @@ function validateForm(){
     return { department: dep, start: d.start, end: d.end };
   });
 
-  return { name, phone, specialization, items };
+  return { name, phone, specialization, college, items };
+}
+
+// ---------------------------------------------------------------------------
+// ترجمة أخطاء Supabase الشائعة إلى رسائل عربية واضحة وقابلة للتصرف
+// ---------------------------------------------------------------------------
+function describeSubmitError(err){
+  const code = err && err.code;
+  const msg = (err && (err.message || err.error_description || err.hint)) || "";
+  const lower = msg.toLowerCase();
+
+  if (code === "42501" || lower.includes("row-level security") || lower.includes("policy")){
+    return "تم رفض الحفظ بسبب سياسات RLS — تأكد من تنفيذ sql/policies.sql في مشروع Supabase";
+  }
+  if (code === "42P01" || lower.includes("does not exist") || lower.includes("relation")){
+    return "الجدول students غير موجود — تأكد من تنفيذ sql/schema.sql في مشروع Supabase";
+  }
+  if (code === "23514" || lower.includes("chk_training_dates") || lower.includes("check constraint")){
+    return "تاريخ النهاية يجب ألا يسبق تاريخ البداية لأحد الأقسام المختارة";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("network request failed")){
+    return "تعذر الاتصال بـ Supabase — تحقق من اتصالك بالإنترنت ومن صحة SUPABASE_URL في js/config.js";
+  }
+  if (lower.includes("invalid api key") || lower.includes("apikey") || lower.includes("jwt")){
+    return "مفتاح Supabase غير صحيح — تحقق من SUPABASE_ANON_KEY في js/config.js";
+  }
+  if (lower.includes("your-project-ref") || lower.includes("your-public-anon-key")){
+    return "لم يتم تحديث js/config.js بعد — ضع بيانات مشروعك الحقيقية بدل القيم الافتراضية";
+  }
+
+  // احتياطي: أظهر رسالة Supabase الأصلية إن وُجدت لتسهيل التشخيص
+  return msg ? `تعذر إتمام التسجيل: ${msg}` : "تعذر إتمام التسجيل، يرجى المحاولة مرة أخرى";
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +320,7 @@ function initFormSubmit(){
           student_name: values.name,
           phone: values.phone,
           specialization: values.specialization,
+          college: values.college,
         },
         values.items
       );
@@ -304,8 +337,8 @@ function initFormSubmit(){
       renderSelectedSummary();
       renderPeriods();
     } catch (err){
-      console.error(err);
-      showToast("تعذر إتمام التسجيل، يرجى المحاولة مرة أخرى", "error");
+      console.error("فشل إدراج بيانات المتدرب:", err);
+      showToast(describeSubmitError(err), "error");
     } finally {
       isSubmitting = false;
       setButtonLoading(submitBtn, false);
