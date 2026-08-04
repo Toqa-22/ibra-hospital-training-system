@@ -110,12 +110,32 @@ function calcDurationDays(start, end){
   return diff;
 }
 
-function formatDurationLabel(days){
-  if (days <= 0) return "—";
+// -------- صياغة عربية لعدد الأيام (تُستخدم كاحتياط لما دون الأسبوع، ولبقية الأيام) --------
+function formatDaysArabic(days){
   if (days === 1) return "يوم واحد";
   if (days === 2) return "يومان";
   if (days >= 3 && days <= 10) return `${days} أيام`;
   return `${days} يوم`;
+}
+
+// -------- صياغة عربية لعدد الأسابيع --------
+function formatWeeksArabic(weeks){
+  if (weeks === 1) return "أسبوع واحد";
+  if (weeks === 2) return "أسبوعان";
+  if (weeks >= 3 && weeks <= 10) return `${weeks} أسابيع`;
+  return `${weeks} أسبوعاً`;
+}
+
+// -------- صياغة مدة التدريب بالأسابيع (مع أيام متبقية إن وُجدت) --------
+function formatDurationLabel(days){
+  if (days <= 0) return "—";
+
+  const weeks = Math.floor(days / 7);
+  const remainingDays = days % 7;
+
+  if (weeks === 0) return formatDaysArabic(remainingDays);
+  if (remainingDays === 0) return formatWeeksArabic(weeks);
+  return `${formatWeeksArabic(weeks)} و${formatDaysArabic(remainingDays)}`;
 }
 
 // -------- تحديد حالة التدريب بناءً على تاريخ اليوم --------
