@@ -99,6 +99,16 @@ async function insertStudentsWithPeriods(base, items){
   return data;
 }
 
+// -------- حذف سجلات متدرب (قسم واحد أو أكثر) عبر معرّفاتها --------
+async function deleteStudentsByIds(ids){
+  const { error } = await supabaseClient
+    .from(TABLE_NAME)
+    .delete()
+    .in("id", ids);
+
+  if (error) throw error;
+}
+
 // -------- جلب جميع سجلات المتدربين --------
 async function fetchAllStudents(){
   const { data, error } = await supabaseClient
