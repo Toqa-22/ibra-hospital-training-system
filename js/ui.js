@@ -136,3 +136,33 @@ function debounce(fn, wait = 250){
     t = setTimeout(() => fn(...args), wait);
   };
 }
+
+// -------- ترجمة أخطاء Supabase الشائعة إلى رسائل عربية واضحة وقابلة للتصرف --------
+// actionLabel: فعل العملية التي فشلت، مثل "تعذر إتمام التسجيل" أو "تعذر حذف الطالب"
+function describeSupabaseError(err, actionLabel = "تعذرت العملية"){
+  const code = err && err.code;
+  const msg = (err && (err.message || err.error_description || err.hint)) || "";
+  const lower = msg.toLowerCase();
+
+  if (code === "42501" || lower.includes("row-level security") || lower.includes("policy")){
+    return `${actionLabel} بسبب سياسات RLS — تأكد من تفعيل السياسة المناسبة (قراءة/إدراج/حذف) في مشروع Supabase`;
+  }
+  if (code === "42P01" || lower.includes("does not exist") || lower.includes("relation")){
+    return "الجدول students غير موجود — تأكد من تنفيذ sql/schema.sql في مشروع Supabase";
+  }
+  if (code === "23514" || lower.includes("chk_training_dates") || lower.includes("check constraint")){
+    return "تاريخ النهاية يجب ألا يسبق تاريخ البداية لأحد الأقسام المختارة";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("network request failed")){
+    return "تعذر الاتصال بـ Supabase — تحقق من اتصالك بالإنترنت ومن صحة SUPABASE_URL في js/config.js";
+  }
+  if (lower.includes("invalid api key") || lower.includes("apikey") || lower.includes("jwt")){
+    return "مفتاح Supabase غير صحيح — تحقق من SUPABASE_ANON_KEY في js/config.js";
+  }
+  if (lower.includes("your-project-ref") || lower.includes("your-public-anon-key")){
+    return "لم يتم تحديث js/config.js بعد — ضع بيانات مشروعك الحقيقية بدل القيم الافتراضية";
+  }
+
+  // احتياطي: أظهر رسالة Supabase الأصلية إن وُجدت لتسهيل التشخيص
+  return msg ? `${actionLabel}: ${msg}` : `${actionLabel}، يرجى المحاولة مرة أخرى`;
+}
