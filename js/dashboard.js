@@ -184,15 +184,31 @@ function bindStaticEvents(){
     });
   });
 
-  document.getElementById("exportBtn").addEventListener("click", () => {
-    const filtered = getFilteredStudents();
-    if (filtered.length === 0){
-      showToast("لا توجد بيانات مطابقة للفلاتر الحالية لطباعتها", "warning");
+  document.getElementById("printLimitBtn").addEventListener("click", () => {
+    const from = document.getElementById("limitFrom").value;
+    const to = document.getElementById("limitTo").value;
+
+    if (!from && !to){
+      showToast("يرجى تحديد الفترة (من / إلى) أولاً", "warning");
       return;
     }
-    const periodFrom = document.getElementById("f_start").value;
-    const periodTo = document.getElementById("f_end").value;
-    openBulkStudentsReport(filtered, { periodFrom, periodTo });
+    if (from && to && to < from){
+      showToast("تاريخ (إلى) لا يمكن أن يسبق تاريخ (من)", "error");
+      return;
+    }
+
+    const matched = state.allStudents.filter(s => {
+      if (from && s.training_start < from) return false;
+      if (to && s.training_start > to) return false;
+      return true;
+    });
+
+    if (matched.length === 0){
+      showToast("لا يوجد متدربون تبدأ فترتهم ضمن هذا النطاق", "warning");
+      return;
+    }
+
+    openBulkStudentsReport(matched, { periodFrom: from, periodTo: to });
   });
 }
 
@@ -218,8 +234,8 @@ function getFilteredStudents(){
     if (spec && !(s.specialization || "").toLowerCase().includes(spec)) return false;
     if (categoryObj && !categoryObj.departments.includes(s.department)) return false;
     if (dept && s.department !== dept) return false;
-    if (start && s.training_start < start) return false;
-    if (end && s.training_start > end) return false;
+    if (start && s.training_start !== start) return false;
+    if (end && s.training_end !== end) return false;
     if (regdate && s.registration_date !== regdate) return false;
     if (status){
       const st = getTrainingStatus(s.training_start, s.training_end).key;
