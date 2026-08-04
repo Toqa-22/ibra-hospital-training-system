@@ -128,6 +128,14 @@ function getTrainingStatus(start, end){
   return { key: "active", label: "قيد التدريب", cls: "status-active" };
 }
 
+// -------- بديل شعار الشريط العلوي في حال عدم وجود assets/logo.png --------
+function handleLogoImgError(img){
+  const fallback = document.createElement("div");
+  fallback.className = img.className;
+  fallback.textContent = "ت";
+  img.replaceWith(fallback);
+}
+
 // -------- تأخير بسيط لمنع النقر المتكرر --------
 function debounce(fn, wait = 250){
   let t;
