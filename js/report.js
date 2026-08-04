@@ -4,6 +4,7 @@
 // يعرض: شعار المستشفى في الأعلى وسطاً، بيانات الطالب، ثم جدول الأقسام والفترات
 // ============================================================================
 
+const MINISTRY_NAME = "وزارة الصحة";
 const HOSPITAL_NAME = "مستشفى إبراء";
 const HOSPITAL_SUBTITLE = "قسم التدريب والتطوير المهني";
 
@@ -27,6 +28,7 @@ function buildReportHTML(group){
 
   const generatedOn = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
   const specializationLabel = sortedRecords[0] ? (sortedRecords[0].specialization || "—") : "—";
+  const collegeLabel = sortedRecords[0] ? (sortedRecords[0].college || "—") : "—";
   const logoUrl = new URL("assets/logo.png", window.location.href).href;
 
   return `
@@ -65,6 +67,7 @@ function buildReportHTML(group){
     display:flex;align-items:center;justify-content:center;
     margin-bottom:10px;
   }
+  .report-header .r-ministry{ font-size:12.5px; font-weight:700; color:#0A8F6A; margin-bottom:4px; letter-spacing:.3px; }
   .report-header h1{ margin:0; font-size:21px; font-weight:800; color:#0F6CBD; }
   .report-header h2{ margin:4px 0 0; font-size:13.5px; font-weight:700; color:#4B5D71; }
   .report-header .r-date{ margin-top:8px; font-size:11.5px; color:#8A97A6; }
@@ -75,7 +78,7 @@ function buildReportHTML(group){
     padding: 18px 22px;
     margin-bottom: 26px;
     display:grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 14px;
   }
   .student-box .s-item .s-label{ font-size:11.5px; color:#64748B; font-weight:700; margin-bottom:4px; }
@@ -124,6 +127,7 @@ function buildReportHTML(group){
 
   <div class="report-header">
     <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
+    <div class="r-ministry">${MINISTRY_NAME}</div>
     <h1>${HOSPITAL_NAME}</h1>
     <h2>${HOSPITAL_SUBTITLE}</h2>
     <div class="r-date">تاريخ إصدار التقرير: ${generatedOn}</div>
@@ -141,6 +145,10 @@ function buildReportHTML(group){
     <div class="s-item">
       <div class="s-label">التخصص</div>
       <div class="s-value">${escapeHtml(specializationLabel)}</div>
+    </div>
+    <div class="s-item">
+      <div class="s-label">الكلية / الجامعة</div>
+      <div class="s-value">${escapeHtml(collegeLabel)}</div>
     </div>
   </div>
 
