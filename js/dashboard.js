@@ -185,7 +185,14 @@ function bindStaticEvents(){
   });
 
   document.getElementById("exportBtn").addEventListener("click", () => {
-    exportStudentsToExcel(state.allStudents);
+    const filtered = getFilteredStudents();
+    if (filtered.length === 0){
+      showToast("لا توجد بيانات مطابقة للفلاتر الحالية لطباعتها", "warning");
+      return;
+    }
+    const periodFrom = document.getElementById("f_start").value;
+    const periodTo = document.getElementById("f_end").value;
+    openBulkStudentsReport(filtered, { periodFrom, periodTo });
   });
 }
 
@@ -211,8 +218,8 @@ function getFilteredStudents(){
     if (spec && !(s.specialization || "").toLowerCase().includes(spec)) return false;
     if (categoryObj && !categoryObj.departments.includes(s.department)) return false;
     if (dept && s.department !== dept) return false;
-    if (start && s.training_start !== start) return false;
-    if (end && s.training_end !== end) return false;
+    if (start && s.training_start < start) return false;
+    if (end && s.training_start > end) return false;
     if (regdate && s.registration_date !== regdate) return false;
     if (status){
       const st = getTrainingStatus(s.training_start, s.training_end).key;
