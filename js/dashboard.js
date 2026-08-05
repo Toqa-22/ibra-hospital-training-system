@@ -82,7 +82,8 @@ function populateCategoryFilterOptions(){
 // ---------------------------------------------------------------------------
 function renderDepartmentCards(){
   const grid = document.getElementById("deptGrid");
-  let groups = groupStudentsByDepartment(state.allStudents);
+  const activeStudents = state.allStudents.filter(s => getTrainingStatus(s.training_start, s.training_end).key === "active");
+  let groups = groupStudentsByDepartment(activeStudents);
 
   if (state.activeCategory){
     const cat = CATEGORIES.find(c => c.id === state.activeCategory);
