@@ -30,6 +30,7 @@ function buildReportHTML(group){
   const specializationLabel = sortedRecords[0] ? (sortedRecords[0].specialization || "—") : "—";
   const collegeLabel = sortedRecords[0] ? (sortedRecords[0].college || "—") : "—";
   const logoUrl = new URL("assets/logo.png", window.location.href).href;
+  const stampUrl = new URL("assets/stamp.png", window.location.href).href;
 
   return `
 <!DOCTYPE html>
@@ -96,8 +97,12 @@ function buildReportHTML(group){
   tbody tr:nth-child(even){ background:#FAFCFE; }
 
   .report-footer{
+    display:flex; align-items:center; justify-content:center; gap:14px;
     text-align:center; font-size:11px; color:#8A97A6; margin-top: 30px;
     border-top:1px dashed #E3E8EE; padding-top:14px;
+  }
+  .report-footer .stamp-img{
+    width:72px; height:72px; object-fit:contain; opacity:0.92; flex-shrink:0;
   }
 
   .print-bar{ text-align:center; margin-bottom:20px; }
@@ -170,7 +175,8 @@ function buildReportHTML(group){
   </div>
 
   <div class="report-footer">
-    هذا التقرير صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}
+    <img class="stamp-img" src="${stampUrl}" alt="ختم المستشفى" onerror="this.remove()">
+    <span>هذا التقرير صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}</span>
   </div>
 
 </body>
