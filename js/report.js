@@ -97,12 +97,21 @@ function buildReportHTML(group){
   tbody tr:nth-child(even){ background:#FAFCFE; }
 
   .report-footer{
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    position:relative;
     text-align:center; font-size:11px; color:#8A97A6; margin-top: 30px;
-    border-top:1px dashed #E3E8EE; padding-top:14px;
+    border-top:1px dashed #E3E8EE; padding: 22px 14px 14px;
   }
   .report-footer .stamp-img{
-    width:72px; height:72px; object-fit:contain; opacity:0.92; flex-shrink:0;
+    position:absolute;
+    top:50%; left:50%;
+    transform: translate(-50%, -50%);
+    width:100px; height:100px; object-fit:contain;
+    opacity:0.4;
+    pointer-events:none;
+  }
+  .report-footer span{
+    position:relative;
+    z-index:1;
   }
 
   .print-bar{ text-align:center; margin-bottom:20px; }
