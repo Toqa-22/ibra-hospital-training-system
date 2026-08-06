@@ -106,7 +106,7 @@ function buildReportHTML(group){
     top:50%; left:50%;
     transform: translate(-50%, -50%);
     width:100px; height:100px; object-fit:contain;
-    opacity:0.4;
+    opacity:0.75;
     pointer-events:none;
   }
   .report-footer span{
