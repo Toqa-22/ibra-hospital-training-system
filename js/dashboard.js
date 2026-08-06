@@ -330,6 +330,12 @@ function renderTable(){
     if (group.records.length === 1){
       const r = group.records[0];
       const status = getTrainingStatus(r.training_start, r.training_end);
+      const singleActionsCell = `
+        <div class="actions-cell">
+          <button class="btn-report" data-report-idx="${gIdx}">⬇ تقرير</button>
+          <button class="btn-edit" data-edit-group="${gIdx}" data-edit-record="0">✏️ تعديل</button>
+          <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
+        </div>`;
       html += `
         <tr>
           <td>${escapeHtml(group.student_name)}</td>
@@ -342,7 +348,7 @@ function renderTable(){
           <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
           <td>${formatDateShort(r.registration_date)}</td>
           <td><span class="status-pill ${status.cls}">${status.label}</span></td>
-          <td>${actionsCell}</td>
+          <td>${singleActionsCell}</td>
         </tr>`;
     } else {
       const starts = group.records.map(r => new Date(r.training_start));
@@ -359,7 +365,7 @@ function renderTable(){
           </td>
           <td colspan="3">
             <span class="count-badge">${group.records.length} أقسام</span>
-            <span class="expand-hint">اضغط لعرض تفاصيل كل قسم ▾</span>
+            <span class="expand-hint">اضغط لعرض تفاصيل كل قسم ▾ (تعديل كل قسم على حدة)</span>
           </td>
           <td colspan="2">${formatDateShort(earliestStart.toISOString().slice(0, 10))} ← ${formatDateShort(latestEnd.toISOString().slice(0, 10))}</td>
           <td>يختلف حسب القسم</td>
@@ -367,7 +373,7 @@ function renderTable(){
           <td><span class="status-pill ${statusSummary.cls}">${statusSummary.label}</span></td>
           <td>${actionsCell}</td>
         </tr>`;
-      group.records.forEach(r => {
+      group.records.forEach((r, rIdx) => {
         const status = getTrainingStatus(r.training_start, r.training_end);
         html += `
           <tr class="sub-row hidden" data-parent="${groupId}">
@@ -380,7 +386,12 @@ function renderTable(){
             <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
             <td>${formatDateShort(r.registration_date)}</td>
             <td><span class="status-pill ${status.cls}">${status.label}</span></td>
-            <td></td>
+            <td>
+              <div class="actions-cell">
+                <button class="btn-edit" data-edit-group="${gIdx}" data-edit-record="${rIdx}">✏️ تعديل</button>
+                <button class="btn-delete" data-delete-record-group="${gIdx}" data-delete-record-idx="${rIdx}">🗑 حذف</button>
+              </div>
+            </td>
           </tr>`;
       });
     }
@@ -390,10 +401,29 @@ function renderTable(){
 
   tbody.querySelectorAll(".group-row").forEach(row => {
     row.addEventListener("click", (e) => {
-      if (e.target.closest(".btn-report") || e.target.closest(".btn-delete")) return; // لا توسّع الصف عند الضغط على أزرار الإجراءات
+      if (e.target.closest("button")) return; // لا توسّع الصف عند الضغط على أي زر إجراء
       const id = row.dataset.group;
       row.classList.toggle("expanded");
       tbody.querySelectorAll(`.sub-row[data-parent="${id}"]`).forEach(sr => sr.classList.toggle("hidden"));
+    });
+  });
+
+  tbody.querySelectorAll("[data-edit-group]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const gIdx = Number(btn.dataset.editGroup);
+      const rIdx = Number(btn.dataset.editRecord);
+      handleEditStudent(pageGroups[gIdx].records[rIdx]);
+    });
+  });
+
+  tbody.querySelectorAll("[data-delete-record-group]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const gIdx = Number(btn.dataset.deleteRecordGroup);
+      const rIdx = Number(btn.dataset.deleteRecordIdx);
+      const record = pageGroups[gIdx].records[rIdx];
+      handleDeleteStudent({ student_name: pageGroups[gIdx].student_name, records: [record] });
     });
   });
 
@@ -414,6 +444,29 @@ function renderTable(){
   });
 
   renderPagination(groups.length, totalPages);
+}
+
+// ---------------------------------------------------------------------------
+// تعديل بيانات سجل متدرب واحد بعد تأكيد الحفظ من نافذة التعديل
+// ---------------------------------------------------------------------------
+async function handleEditStudent(record){
+  const updates = await showEditStudentModal(record);
+  if (!updates) return;
+
+  try {
+    await updateStudentRecord(record.id, updates);
+
+    const idx = state.allStudents.findIndex(s => s.id === record.id);
+    if (idx !== -1) state.allStudents[idx] = { ...state.allStudents[idx], ...updates };
+
+    showToast("تم حفظ التعديلات بنجاح", "success");
+    renderDepartmentCards();
+    populateDepartmentFilterOptions();
+    renderTable();
+  } catch (err){
+    console.error("فشل تعديل بيانات المتدرب:", err);
+    showToast(describeSupabaseError(err, "تعذر حفظ التعديلات"), "error");
+  }
 }
 
 // ---------------------------------------------------------------------------
