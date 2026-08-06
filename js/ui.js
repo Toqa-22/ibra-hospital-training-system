@@ -102,12 +102,18 @@ function formatDateShort(dateStr){
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
-// -------- حساب مدة التدريب بالأيام + صياغة عربية --------
+// -------- حساب مدة التدريب بأيام العمل فقط (الأحد إلى الخميس، باستثناء الجمعة والسبت) --------
 function calcDurationDays(start, end){
   const s = new Date(start + "T00:00:00");
   const e = new Date(end + "T00:00:00");
-  const diff = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
-  return diff;
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e){
+    const day = cur.getDay(); // 0=الأحد … 5=الجمعة، 6=السبت
+    if (day !== 5 && day !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
 }
 
 // -------- صياغة عربية لعدد الأيام (تُستخدم كاحتياط لما دون الأسبوع، ولبقية الأيام) --------
@@ -126,12 +132,12 @@ function formatWeeksArabic(weeks){
   return `${weeks} أسبوعاً`;
 }
 
-// -------- صياغة مدة التدريب بالأسابيع (مع أيام متبقية إن وُجدت) --------
-function formatDurationLabel(days){
-  if (days <= 0) return "—";
+// -------- صياغة مدة التدريب بأسابيع العمل (٥ أيام: الأحد–الخميس)، مع أيام متبقية إن وُجدت --------
+function formatDurationLabel(workingDays){
+  if (workingDays <= 0) return "—";
 
-  const weeks = Math.floor(days / 7);
-  const remainingDays = days % 7;
+  const weeks = Math.floor(workingDays / 5);
+  const remainingDays = workingDays % 5;
 
   if (weeks === 0) return formatDaysArabic(remainingDays);
   if (remainingDays === 0) return formatWeeksArabic(weeks);
