@@ -14,6 +14,7 @@ const state = {
   page: 1,
 };
 
+
 document.addEventListener("DOMContentLoaded", async () => {
   renderCategoryChips();
   populateCategoryFilterOptions();
