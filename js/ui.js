@@ -81,6 +81,123 @@ function showConfirm({ title = "تأكيد العملية", text = "", confirmLa
   });
 }
 
+// -------- نافذة تعديل بيانات متدرب (سجل واحد) --------
+function ensureEditModal(){
+  let overlay = document.querySelector(".edit-modal-overlay");
+  if (!overlay){
+    overlay = document.createElement("div");
+    overlay.className = "modal-overlay edit-modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal-box edit-modal-box">
+        <h4 class="m-title">تعديل بيانات المتدرب</h4>
+        <div class="edit-form">
+          <div class="e-field">
+            <label>اسم الطالب</label>
+            <input type="text" class="e-name">
+          </div>
+          <div class="e-field">
+            <label>رقم الهاتف</label>
+            <input type="text" class="e-phone" inputmode="numeric">
+          </div>
+          <div class="e-field">
+            <label>الكلية / الجامعة</label>
+            <input type="text" class="e-college">
+          </div>
+          <div class="e-field">
+            <label>التخصص</label>
+            <input type="text" class="e-spec">
+          </div>
+          <div class="e-field full">
+            <label>القسم</label>
+            <select class="e-dept"></select>
+          </div>
+          <div class="e-field">
+            <label>بداية التدريب</label>
+            <input type="date" class="e-start">
+          </div>
+          <div class="e-field">
+            <label>نهاية التدريب</label>
+            <input type="date" class="e-end">
+          </div>
+        </div>
+        <p class="e-error"></p>
+        <div class="modal-actions">
+          <button class="m-cancel">إلغاء</button>
+          <button class="m-confirm m-save">حفظ التعديلات</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+  return overlay;
+}
+
+function showEditStudentModal(record){
+  return new Promise(resolve => {
+    const overlay = ensureEditModal();
+    const nameInput = overlay.querySelector(".e-name");
+    const phoneInput = overlay.querySelector(".e-phone");
+    const collegeInput = overlay.querySelector(".e-college");
+    const specInput = overlay.querySelector(".e-spec");
+    const deptSelect = overlay.querySelector(".e-dept");
+    const startInput = overlay.querySelector(".e-start");
+    const endInput = overlay.querySelector(".e-end");
+    const errorEl = overlay.querySelector(".e-error");
+
+    nameInput.value = record.student_name || "";
+    phoneInput.value = record.phone || "";
+    collegeInput.value = record.college || "";
+    specInput.value = record.specialization || "";
+    deptSelect.innerHTML = DEPARTMENTS.map(d => `<option value="${escapeHtml(d)}" ${d === record.department ? "selected" : ""}>${escapeHtml(d)}</option>`).join("");
+    startInput.value = record.training_start || "";
+    endInput.value = record.training_end || "";
+    errorEl.textContent = "";
+    errorEl.classList.remove("show");
+
+    overlay.classList.add("show");
+
+    const cancelBtn = overlay.querySelector(".m-cancel");
+    const confirmBtn = overlay.querySelector(".m-save");
+
+    const cleanup = (result) => {
+      overlay.classList.remove("show");
+      cancelBtn.removeEventListener("click", onCancel);
+      confirmBtn.removeEventListener("click", onConfirm);
+      resolve(result);
+    };
+    const onCancel = () => cleanup(null);
+    const onConfirm = () => {
+      const student_name = nameInput.value.trim();
+      const phone = phoneInput.value.trim();
+      const college = collegeInput.value.trim();
+      const specialization = specInput.value.trim();
+      const department = deptSelect.value;
+      const training_start = startInput.value;
+      const training_end = endInput.value;
+
+      if (!student_name || !phone || !specialization || !department || !training_start || !training_end){
+        errorEl.textContent = "يرجى تعبئة جميع الحقول المطلوبة";
+        errorEl.classList.add("show");
+        return;
+      }
+      if (!/^[0-9]+$/.test(phone)){
+        errorEl.textContent = "رقم الهاتف يجب أن يحتوي أرقاماً فقط";
+        errorEl.classList.add("show");
+        return;
+      }
+      if (new Date(training_end) < new Date(training_start)){
+        errorEl.textContent = "تاريخ النهاية لا يمكن أن يسبق تاريخ البداية";
+        errorEl.classList.add("show");
+        return;
+      }
+
+      cleanup({ student_name, phone, college, specialization, department, training_start, training_end });
+    };
+
+    cancelBtn.addEventListener("click", onCancel);
+    confirmBtn.addEventListener("click", onConfirm);
+  });
+}
+
 // -------- تبديل حالة زر التحميل (Spinner) --------
 function setButtonLoading(btn, isLoading, labelEl){
   btn.disabled = isLoading;
