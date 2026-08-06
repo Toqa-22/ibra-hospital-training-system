@@ -681,6 +681,50 @@ select:focus-visible,
 .m-cancel{ background: var(--gray-status-light); color: var(--text); }
 .m-confirm{ background: var(--danger); color:#fff; }
 
+/* ============ نافذة تعديل بيانات المتدرب ============ */
+.edit-modal-box{
+  max-width: 560px;
+  text-align: right;
+}
+.edit-modal-box .m-title{ text-align:center; margin-bottom:18px; }
+.edit-form{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+  margin-bottom: 10px;
+}
+.edit-form .e-field.full{ grid-column: 1 / -1; }
+.edit-form label{
+  display:block; font-size:12.5px; font-weight:700; margin-bottom:6px; color:#31465C;
+}
+.edit-form input,
+.edit-form select{
+  width:100%;
+  padding:10px 12px;
+  border-radius: var(--radius-sm);
+  border:1.5px solid var(--border);
+  font-size:13.5px;
+  background:#FBFCFE;
+}
+.edit-form input:focus,
+.edit-form select:focus{
+  outline:none; border-color: var(--primary); box-shadow:0 0 0 3px var(--primary-light);
+}
+.e-error{
+  display:none;
+  color: var(--danger);
+  font-size:12.5px;
+  font-weight:700;
+  margin: 4px 0 14px;
+  text-align:center;
+}
+.e-error.show{ display:block; }
+.m-save{ background: var(--secondary); color:#fff; }
+
+@media (max-width: 560px){
+  .edit-form{ grid-template-columns: 1fr; }
+}
+
 /* ============ الاستجابة لجميع أحجام الشاشات ============ */
 
 /* شاشات كبيرة جداً: سقف مريح لعرض القراءة */
