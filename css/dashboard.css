@@ -260,7 +260,7 @@
 table.students-table{
   width:100%;
   border-collapse: collapse;
-  min-width: 1150px;
+  min-width: 1260px;
 }
 .students-table thead th{
   position: sticky; top:0;
@@ -422,6 +422,23 @@ table.students-table{
   white-space:nowrap;
 }
 .btn-delete:hover{ background: var(--danger); color:#fff; transform: translateY(-1px); }
+
+.btn-edit{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background: var(--secondary-light);
+  color: var(--secondary);
+  border: none;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  font-weight:800;
+  font-size:12px;
+  cursor:pointer;
+  transition: background var(--transition), transform var(--transition);
+  white-space:nowrap;
+}
+.btn-edit:hover{ background: var(--secondary); color:#fff; transform: translateY(-1px); }
 
 .table-empty{
   text-align:center;
