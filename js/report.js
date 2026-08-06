@@ -48,6 +48,9 @@ function buildReportHTML(group){
     color:#1B2A3A;
     margin:0;
     padding: 34px 42px;
+    min-height: 100vh;
+    display:flex;
+    flex-direction:column;
   }
   .report-header{
     display:flex;
@@ -98,8 +101,9 @@ function buildReportHTML(group){
 
   .report-footer{
     position:relative;
-    text-align:center; font-size:11px; color:#8A97A6; margin-top: 30px;
-    border-top:1px dashed #E3E8EE; padding: 22px 14px 14px;
+    text-align:center; font-size:11px; color:#8A97A6;
+    margin-top: auto;
+    padding: 22px 14px 14px;
   }
   .report-footer .stamp-img{
     position:absolute;
