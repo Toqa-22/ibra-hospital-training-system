@@ -14,6 +14,7 @@ function ensureToastStack(){
   return stack;
 }
 
+
 const TOAST_ICONS = { success: "✅", error: "⚠️", warning: "⏳" };
 
 function showToast(message, type = "success", duration = 3600){
