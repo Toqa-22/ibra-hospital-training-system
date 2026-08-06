@@ -97,7 +97,7 @@ function buildReportHTML(group){
   tbody tr:nth-child(even){ background:#FAFCFE; }
 
   .report-footer{
-    display:flex; align-items:center; justify-content:center; gap:14px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
     text-align:center; font-size:11px; color:#8A97A6; margin-top: 30px;
     border-top:1px dashed #E3E8EE; padding-top:14px;
   }
