@@ -1,9 +1,22 @@
 // ============================================================================
 // ui.js
-// عناصر واجهة مشتركة: التنبيهات (Toast) ونافذة التأكيد المخصصة
-// لا يوجد أي استخدام لـ alert() أو confirm()
+// عناصر واجهة مشتركة تُستخدم من كل من index.html وdashboard.html:
+// التنبيهات المنبثقة (Toast)، نافذة التأكيد المخصصة، نافذة تعديل بيانات
+// المتدرب، بالإضافة إلى دوال تنسيق التواريخ والمدة (بأسبوع عمل من الأحد
+// للخميس)، حساب حالة التدريب، وترجمة أخطاء Supabase لرسائل عربية مفهومة.
+//
+// لا يوجد أي استخدام لـ alert() أو confirm() الأصليتين في المتصفح؛ كل تفاعل
+// مع المستخدم يمر عبر showToast()، showConfirm()، أو showEditStudentModal().
+//
+// يجب تحميل هذا الملف *قبل* supabase.js وapp.js وdashboard.js وreport.js
+// لأنهم جميعاً يعتمدون على الدوال المعرَّفة هنا.
 // ============================================================================
 
+/**
+ * التأكد من وجود حاوية التنبيهات المنبثقة (toast-stack) في الصفحة، وإنشاؤها
+ * إن لم تكن موجودة بعد. تُستدعى داخلياً من showToast() فقط.
+ * @returns {HTMLElement} عنصر الحاوية
+ */
 function ensureToastStack(){
   let stack = document.querySelector(".toast-stack");
   if (!stack){
@@ -14,9 +27,16 @@ function ensureToastStack(){
   return stack;
 }
 
-
 const TOAST_ICONS = { success: "✅", error: "⚠️", warning: "⏳" };
 
+/**
+ * عرض تنبيه منبثق قصير للمستخدم (نجاح/خطأ/تحذير) في أسفل يسار الشاشة، يختفي
+ * تلقائياً بعد مدة محددة أو عند الضغط على زر الإغلاق. الاستبدال الوحيد
+ * لـ alert() في هذا المشروع لعرض رسائل النجاح/الفشل.
+ * @param {string} message - نص الرسالة (يُعقَّم تلقائياً عبر escapeHtml)
+ * @param {'success'|'error'|'warning'} type - نوع التنبيه ولونه
+ * @param {number} duration - المدة بالمللي ثانية قبل الاختفاء التلقائي (0 = لا يختفي تلقائياً)
+ */
 function showToast(message, type = "success", duration = 3600){
   const stack = ensureToastStack();
   const toast = document.createElement("div");
@@ -37,6 +57,11 @@ function showToast(message, type = "success", duration = 3600){
 }
 
 // -------- نافذة تأكيد مخصصة (بديل لـ confirm()) --------
+/**
+ * التأكد من وجود نافذة التأكيد المنبثقة (confirm modal) في الصفحة، وإنشاؤها
+ * إن لم تكن موجودة بعد. تُستدعى داخلياً من showConfirm() فقط.
+ * @returns {HTMLElement} عنصر الطبقة الخلفية (overlay) للنافذة
+ */
 function ensureModal(){
   let overlay = document.querySelector(".modal-overlay");
   if (!overlay){
@@ -57,6 +82,12 @@ function ensureModal(){
   return overlay;
 }
 
+/**
+ * عرض نافذة تأكيد مخصصة (بديل alert/confirm الأصليين في المتصفح) وإرجاع وعد
+ * (Promise) ينتظر قرار المستخدم. تُستخدم قبل أي عملية حساسة كالحذف النهائي.
+ * @param {{title?:string, text?:string, confirmLabel?:string}} options - نصوص النافذة القابلة للتخصيص
+ * @returns {Promise<boolean>} true إذا ضغط المستخدم تأكيد، false إذا ألغى
+ */
 function showConfirm({ title = "تأكيد العملية", text = "", confirmLabel = "تأكيد" } = {}){
   return new Promise(resolve => {
     const overlay = ensureModal();
@@ -83,6 +114,12 @@ function showConfirm({ title = "تأكيد العملية", text = "", confirmLa
 }
 
 // -------- نافذة تعديل بيانات متدرب (سجل واحد) --------
+/**
+ * التأكد من وجود نافذة تعديل بيانات المتدرب في الصفحة، وإنشاؤها بكل حقولها
+ * (الاسم، الهاتف، الكلية، التخصص، القسم، تاريخي البداية والنهاية) إن لم تكن
+ * موجودة بعد. تُستدعى داخلياً من showEditStudentModal() فقط.
+ * @returns {HTMLElement} عنصر الطبقة الخلفية (overlay) لنافذة التعديل
+ */
 function ensureEditModal(){
   let overlay = document.querySelector(".edit-modal-overlay");
   if (!overlay){
@@ -132,6 +169,13 @@ function ensureEditModal(){
   return overlay;
 }
 
+/**
+ * عرض نافذة تعديل مُعبّأة مسبقاً بقيم سجل معيّن، مع تحقق فوري من صحة الحقول
+ * (كلها إلزامية، الهاتف أرقام فقط، تاريخ النهاية لا يسبق البداية) قبل قبول
+ * الحفظ. تُرجع وعداً ينتظر قرار المستخدم.
+ * @param {object} record - السجل الحالي المطلوب تعديله (لتعبئة الحقول بقيمه)
+ * @returns {Promise<object|null>} كائن القيم الجديدة عند الحفظ، أو null عند الإلغاء
+ */
 function showEditStudentModal(record){
   return new Promise(resolve => {
     const overlay = ensureEditModal();
@@ -200,18 +244,36 @@ function showEditStudentModal(record){
 }
 
 // -------- تبديل حالة زر التحميل (Spinner) --------
+/**
+ * تبديل شكل أي زر بين حالته العادية وحالة «جارٍ التحميل» (تعطيل الزر + إظهار
+ * دوّارة تحميل صغيرة بداخله). تُستخدم أثناء انتظار رد Supabase لمنع النقر
+ * المتكرر ولإعطاء المستخدم إشارة بصرية أن العملية قيد التنفيذ.
+ * @param {HTMLElement} btn - عنصر الزر المطلوب تبديل حالته
+ * @param {boolean} isLoading - true لتفعيل حالة التحميل، false لإعادته لحالته الطبيعية
+ */
 function setButtonLoading(btn, isLoading, labelEl){
   btn.disabled = isLoading;
   btn.classList.toggle("loading", isLoading);
 }
 
 // -------- تنسيق التاريخ الميلادي بشكل عربي مقروء --------
+/**
+ * تنسيق تاريخ (بصيغة yyyy-mm-dd) إلى نص عربي طويل مقروء (مثال: ٦ أغسطس ٢٠٢٦).
+ * @param {string} dateStr - التاريخ بصيغة yyyy-mm-dd
+ * @returns {string} التاريخ بصيغة عربية طويلة، أو «—» إن كانت القيمة فارغة
+ */
 function formatArabicDate(dateStr){
   if (!dateStr) return "—";
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
 }
 
+/**
+ * تنسيق تاريخ (بصيغة yyyy-mm-dd أو كائن Date) إلى صيغة مختصرة يوم/شهر/سنة
+ * (مثال: 06/08/2026)، تُستخدم في كل الجداول والتقارير لاختصار المساحة.
+ * @param {string|Date} dateStr - التاريخ المطلوب تنسيقه
+ * @returns {string} التاريخ بصيغة dd/mm/yyyy، أو «—» إن كانت القيمة فارغة
+ */
 function formatDateShort(dateStr){
   if (!dateStr) return "—";
   const d = new Date(dateStr + "T00:00:00");
@@ -221,6 +283,14 @@ function formatDateShort(dateStr){
 }
 
 // -------- حساب مدة التدريب بأيام العمل فقط (الأحد إلى الخميس، باستثناء الجمعة والسبت) --------
+/**
+ * حساب عدد أيام العمل الفعلية بين تاريخي بداية ونهاية، باعتبار أسبوع العمل
+ * من الأحد إلى الخميس فقط (٥ أيام) — أي يوم جمعة أو سبت يقع ضمن الفترة
+ * لا يُحتسب ضمن المدة المعروضة للمستخدم، مهما كان عدد الأيام التقويمية الفعلي.
+ * @param {string} start - تاريخ البداية بصيغة yyyy-mm-dd
+ * @param {string} end - تاريخ النهاية بصيغة yyyy-mm-dd
+ * @returns {number} عدد أيام العمل (الأحد-الخميس) ضمن الفترة، شاملاً يومي البداية والنهاية
+ */
 function calcDurationDays(start, end){
   const s = new Date(start + "T00:00:00");
   const e = new Date(end + "T00:00:00");
@@ -235,6 +305,12 @@ function calcDurationDays(start, end){
 }
 
 // -------- صياغة عربية لعدد الأيام (تُستخدم كاحتياط لما دون الأسبوع، ولبقية الأيام) --------
+/**
+ * صياغة عربية نحوياً صحيحة لعدد أيام (يوم واحد / يومان / ٣-١٠ أيام / أكثر).
+ * تُستخدم كجزء من formatDurationLabel() لعرض الأيام المتبقية بعد الأسابيع الكاملة.
+ * @param {number} days - عدد الأيام
+ * @returns {string} النص العربي المناسب للعدد
+ */
 function formatDaysArabic(days){
   if (days === 1) return "يوم واحد";
   if (days === 2) return "يومان";
@@ -243,6 +319,12 @@ function formatDaysArabic(days){
 }
 
 // -------- صياغة عربية لعدد الأسابيع --------
+/**
+ * صياغة عربية نحوياً صحيحة لعدد أسابيع العمل (أسبوع واحد / أسبوعان / ٣-١٠ أسابيع / أكثر).
+ * «الأسبوع» هنا يعني أسبوع عمل من الأحد للخميس (٥ أيام)، وليس أسبوعاً تقويمياً كاملاً.
+ * @param {number} weeks - عدد الأسابيع
+ * @returns {string} النص العربي المناسب للعدد
+ */
 function formatWeeksArabic(weeks){
   if (weeks === 1) return "أسبوع واحد";
   if (weeks === 2) return "أسبوعان";
@@ -251,6 +333,14 @@ function formatWeeksArabic(weeks){
 }
 
 // -------- صياغة مدة التدريب بأسابيع العمل (٥ أيام: الأحد–الخميس)، مع أيام متبقية إن وُجدت --------
+/**
+ * الدالة الرئيسية لعرض مدة التدريب للمستخدم: تحوّل عدد أيام العمل (الناتج من
+ * calcDurationDays) إلى صياغة عربية مركّبة من أسابيع وأيام متبقية معاً
+ * (مثال: «٤ أسابيع ويومان»)، أو أيام فقط إن كانت المدة أقل من أسبوع كامل.
+ * تُستخدم في كل مكان تظهر فيه «مدة التدريب» بالمشروع (النموذج، الجدول، التقارير).
+ * @param {number} workingDays - عدد أيام العمل (ناتج calcDurationDays)
+ * @returns {string} نص المدة بصياغة عربية، أو «—» إن كانت القيمة صفر أو أقل
+ */
 function formatDurationLabel(workingDays){
   if (workingDays <= 0) return "—";
 
@@ -263,6 +353,14 @@ function formatDurationLabel(workingDays){
 }
 
 // -------- تحديد حالة التدريب بناءً على تاريخ اليوم --------
+/**
+ * تحديد حالة تدريب سجل واحد بمقارنة تاريخ اليوم بفترة البداية والنهاية:
+ * «لم يبدأ» إن كان اليوم قبل البداية، «انتهى» إن كان بعد النهاية،
+ * وإلا «قيد التدريب». تُستخدم لعرض شارة الحالة الملوّنة في كل مكان بالمشروع.
+ * @param {string} start - تاريخ بداية التدريب بصيغة yyyy-mm-dd
+ * @param {string} end - تاريخ نهاية التدريب بصيغة yyyy-mm-dd
+ * @returns {{key:string, label:string, cls:string}} مفتاح الحالة، نصها العربي، وصنف CSS الخاص بلونها
+ */
 function getTrainingStatus(start, end){
   const today = new Date(); today.setHours(0,0,0,0);
   const s = new Date(start + "T00:00:00");
@@ -273,6 +371,12 @@ function getTrainingStatus(start, end){
 }
 
 // -------- بديل شعار الشريط العلوي في حال عدم وجود assets/logo.png --------
+/**
+ * معالج حدث onerror لصورة الشعار (assets/logo.png): إن تعذّر تحميل الصورة
+ * (غير موجودة أو الرابط خاطئ)، تُستبدل تلقائياً بشارة نصية بديلة («ت»)
+ * بنفس أبعاد وصنف CSS الصورة الأصلية، بدل ترك أيقونة صورة مكسورة في الواجهة.
+ * @param {HTMLImageElement} img - عنصر الصورة الذي فشل تحميله
+ */
 function handleLogoImgError(img){
   const fallback = document.createElement("div");
   fallback.className = img.className;
@@ -281,6 +385,14 @@ function handleLogoImgError(img){
 }
 
 // -------- تأخير بسيط لمنع النقر المتكرر --------
+/**
+ * تأخير تنفيذ دالة حتى تتوقف الاستدعاءات المتكررة لمدة معينة، لمنع تنفيذ
+ * منطق مكلف (كإعادة رسم الجدول بالكامل) مع كل ضغطة مفتاح أثناء الكتابة
+ * في حقول البحث الفورية. كل استدعاء جديد قبل انتهاء المهلة يُلغي المؤقت السابق.
+ * @param {Function} fn - الدالة المطلوب تأخيرها
+ * @param {number} wait - مدة الانتظار بالمللي ثانية بعد آخر استدعاء
+ * @returns {Function} نسخة مؤخَّرة (debounced) من الدالة الأصلية
+ */
 function debounce(fn, wait = 250){
   let t;
   return (...args) => {
@@ -291,6 +403,16 @@ function debounce(fn, wait = 250){
 
 // -------- ترجمة أخطاء Supabase الشائعة إلى رسائل عربية واضحة وقابلة للتصرف --------
 // actionLabel: فعل العملية التي فشلت، مثل "تعذر إتمام التسجيل" أو "تعذر حذف الطالب"
+/**
+ * ترجمة كائن خطأ خام قادم من Supabase (بعد فشل أي طلب insert/update/delete)
+ * إلى رسالة عربية واضحة وقابلة للتصرف، بمطابقة أكواد/رسائل الأخطاء الشائعة
+ * (سياسات RLS، جدول غير موجود، مخالفة قيد تاريخي، مفتاح API خاطئ، عدم تحديث
+ * config.js بعد...). تُستخدم في كل مكان يُعرض فيه خطأ فشل عملية للمستخدم،
+ * مع طباعة الخطأ الكامل في Console دائماً لتسهيل التشخيص الفني.
+ * @param {object} err - كائن الخطأ كما أرجعه عميل Supabase
+ * @param {string} actionLabel - وصف العملية التي فشلت (مثال: «تعذر حذف الطالب»)
+ * @returns {string} رسالة عربية جاهزة للعرض في Toast
+ */
 function describeSupabaseError(err, actionLabel = "تعذرت العملية"){
   const code = err && err.code;
   const msg = (err && (err.message || err.error_description || err.hint)) || "";
@@ -300,7 +422,7 @@ function describeSupabaseError(err, actionLabel = "تعذرت العملية"){
     return `${actionLabel} بسبب سياسات RLS — تأكد من تفعيل السياسة المناسبة (قراءة/إدراج/حذف) في مشروع Supabase`;
   }
   if (code === "42P01" || lower.includes("does not exist") || lower.includes("relation")){
-    return "الجدول students غير موجود — تأكد من تنفيذ sql/schema.sql في مشروع Supabase";
+    return "الجدول students غير موجود — تأكد من تنفيذ sql/full_setup.sql في مشروع Supabase";
   }
   if (code === "23514" || lower.includes("chk_training_dates") || lower.includes("check constraint")){
     return "تاريخ النهاية يجب ألا يسبق تاريخ البداية لأحد الأقسام المختارة";
