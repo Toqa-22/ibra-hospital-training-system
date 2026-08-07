@@ -1,13 +1,31 @@
 // ============================================================================
 // report.js
-// إنشاء تقرير قابل للطباعة/الحفظ كـ PDF لكل متدرب على حدة
-// يعرض: شعار المستشفى في الأعلى وسطاً، بيانات الطالب، ثم جدول الأقسام والفترات
+// بناء تقريرين قابلين للطباعة/الحفظ كـ PDF عبر خاصية الطباعة في المتصفح
+// (بدون أي مكتبة PDF خارجية):
+//   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «⬇ تقرير»
+//      لكل صف في جدول لوحة التحكم.
+//   2) تقرير عام لعدة متدربين معاً (buildBulkReportHTML/openBulkStudentsReport)
+//      — من لوحة «🖨️ طباعة تقرير لفترة محددة» المستقلة عن فلاتر البحث،
+//      بتنسيق A4 أفقي (Landscape) مع تكرار رأس الجدول تلقائياً على كل صفحة.
+//
+// يعتمد على دوال من js/ui.js (escapeHtml, formatDateShort, calcDurationDays,
+// formatDurationLabel, getTrainingStatus) وعلى js/departments.js
+// (findCategoryForDepartment) — يجب تحميلهما قبل هذا الملف.
 // ============================================================================
 
 const MINISTRY_NAME = "وزارة الصحة";
 const HOSPITAL_NAME = "مستشفى إبراء";
 const HOSPITAL_SUBTITLE = "قسم التطوير والتوجيه المهني";
 
+/**
+ * بناء صفحة HTML مستقلة وكاملة (تحتوي كل الأنماط داخلها) لتقرير متدرب واحد:
+ * شعار الوزارة/المستشفى وسماً توسيطاً في الأعلى، صندوق بيانات الطالب (الاسم،
+ * الهاتف، التخصص، الكلية)، جدول بكل الأقسام التي سُجّل فيها مع فئة كل قسم
+ * وفترته ومدته، وختم شفاف فوق سطر التذييل في أسفل الصفحة. لا تُستخدم مباشرة —
+ * يستدعيها openStudentReport() فقط لكتابة الناتج داخل نافذة منبثقة جديدة.
+ * @param {{student_name:string, phone:string, records:Array}} group - بيانات الطالب وكل سجلاته
+ * @returns {string} نص HTML كامل جاهز لكتابته في مستند نافذة جديدة
+ */
 function buildReportHTML(group){
   const sortedRecords = group.records
     .slice()
@@ -197,6 +215,11 @@ function buildReportHTML(group){
 </html>`;
 }
 
+/**
+ * فتح نافذة متصفح منبثقة جديدة وكتابة تقرير الطالب (من buildReportHTML) بداخلها.
+ * إن كانت النوافذ المنبثقة محظورة في المتصفح، تُعرض رسالة تنبيه بدل الفشل الصامت.
+ * @param {object} group - بيانات الطالب الممررة كما هي إلى buildReportHTML
+ */
 function openStudentReport(group){
   const reportWindow = window.open("", "_blank", "width=900,height=760");
   if (!reportWindow){
@@ -213,6 +236,16 @@ function openStudentReport(group){
 // (يُستخدم من لوحة التحكم بدلاً من تصدير Excel)
 // ============================================================================
 
+/**
+ * بناء صفحة HTML مستقلة لتقرير عام يضم عدة متدربين دفعة واحدة (تقرير الفترة
+ * المحددة من لوحة التحكم). الجدول بعرض ثابت النسب (table-layout: fixed) بحيث
+ * تتّسع كل الأعمدة العشرة دائماً داخل عرض صفحة A4 الأفقية دون تمرير أفقي أو
+ * خطوط رأسية، ورأس الجدول (thead) يتكرر تلقائياً أعلى كل صفحة جديدة عند
+ * تجاوز البيانات لصفحة واحدة أثناء الطباعة.
+ * @param {Array} students - السجلات المطلوب تضمينها (نتيجة فلترة حسب الفترة عادة)
+ * @param {{periodFrom?:string, periodTo?:string}} periodInfo - حدود الفترة المستخدمة، لعرضها فقط في شريط الملخص
+ * @returns {string} نص HTML كامل جاهز لكتابته في مستند نافذة جديدة
+ */
 function buildBulkReportHTML(students, periodInfo = {}){
   const sorted = students
     .slice()
@@ -251,13 +284,17 @@ function buildBulkReportHTML(students, periodInfo = {}){
 <title>تقرير المتدربين</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
+  /* حجم الصفحة عند الطباعة/الحفظ كـ PDF: A4 أفقي (Landscape) بهوامش صغيرة */
+  @page{ size: A4 landscape; margin: 10mm; }
+
   *{ box-sizing:border-box; }
   body{
     font-family:'Cairo', Tahoma, sans-serif;
     direction: rtl;
     color:#1B2A3A;
-    margin:0;
-    padding: 34px 42px;
+    margin:0 auto;
+    padding: 24px 30px;
+    max-width: 1150px; /* يقارب عرض صفحة A4 الأفقية على الشاشة قبل الطباعة */
   }
   .report-header{
     display:flex;
@@ -289,18 +326,35 @@ function buildBulkReportHTML(students, periodInfo = {}){
   }
   .summary-bar span.count{ color:#0A8F6A; }
 
-  table{ width:100%; border-collapse:collapse; margin-bottom: 20px; }
+  /* ===== الجدول: عرض ثابت النسب ليتّسع كل الأعمدة داخل عرض صفحة A4 الأفقية دائماً،
+     بدون أي تمرير أفقي وبدون أي خطوط رأسية بين الأعمدة (فواصل صفوف فقط) ===== */
+  table{
+    width:100%;
+    border-collapse:collapse;
+    table-layout: fixed; /* يجبر الأعمدة على الالتزام بالعرض المحدد في colgroup بدل التمدد حسب المحتوى */
+    margin-bottom: 20px;
+  }
+  /* لا حدود جانبية إطلاقاً على الجدول أو الخلايا — فقط خط أفقي رفيع يفصل بين الصفوف */
+  table, th, td{ border-left:none; border-right:none; border-top:none; }
+
+  /* تكرار صف رأس الجدول تلقائياً أعلى كل صفحة جديدة عند الطباعة إذا تجاوزت البيانات صفحة واحدة */
+  thead{ display: table-header-group; }
+  tbody{ display: table-row-group; }
+  tr{ page-break-inside: avoid; } /* يمنع تقطيع منتصف صف واحد بين صفحتين */
+
   thead th{
-    background:#0F6CBD; color:#fff; font-size:11.8px; font-weight:800;
-    padding:9px 10px; text-align:center; white-space:nowrap;
+    background:#0F6CBD; color:#fff; font-size:10.8px; font-weight:800;
+    padding:8px 6px; text-align:center;
+    word-break: break-word; /* يسمح بلف النص بدل تمديد العمود وكسر الصفحة */
   }
   tbody td{
-    padding:9px 10px; font-size:11.8px; text-align:center;
-    border-bottom:1px solid #E3E8EE; white-space:nowrap;
+    padding:7px 6px; font-size:10.5px; text-align:center;
+    border-bottom:1px solid #E3E8EE;
+    word-break: break-word;
   }
   tbody tr:nth-child(even){ background:#FAFCFE; }
 
-  .r-status{ display:inline-block; padding:4px 11px; border-radius:999px; font-size:10.5px; font-weight:800; }
+  .r-status{ display:inline-block; padding:4px 11px; border-radius:999px; font-size:10px; font-weight:800; }
   .status-active{ background:#E7F7EF; color:#0A8F6A; }
   .status-upcoming{ background:#E9F1FC; color:#0F6CBD; }
   .status-ended{ background:#EEF1F4; color:#5B6B7C; }
@@ -316,15 +370,17 @@ function buildBulkReportHTML(students, periodInfo = {}){
     border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
     font-family:'Cairo', Tahoma, sans-serif;
   }
-  @media print{ .print-bar{ display:none; } body{ padding:0 24px; } thead th{ position: static; } }
-
-  .table-wrap{ overflow-x:auto; }
+  /* عند الطباعة الفعلية: نخفي زر الطباعة نفسه، ونزيل الحشو الإضافي لأن @page يضبط الهامش الفعلي */
+  @media print{
+    .print-bar{ display:none; }
+    body{ padding:0; max-width:none; }
+  }
 
   @media (max-width: 640px){
-    body{ padding: 22px 16px; }
+    body{ padding: 18px 14px; }
     .report-header img, .report-header .logo-fallback{ width:52px; height:52px; }
     .report-header h1{ font-size:18px; }
-    table{ min-width: 900px; }
+    thead th, tbody td{ font-size:9.5px; padding:6px 4px; }
   }
 </style>
 </head>
@@ -348,27 +404,38 @@ function buildBulkReportHTML(students, periodInfo = {}){
     <span>عدد السجلات: <span class="count">${sorted.length}</span></span>
   </div>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>اسم الطالب</th>
-          <th>رقم الهاتف</th>
-          <th>الكلية</th>
-          <th>التخصص</th>
-          <th>القسم</th>
-          <th>بداية التدريب</th>
-          <th>نهاية التدريب</th>
-          <th>مدة التدريب</th>
-          <th>تاريخ التسجيل</th>
-          <th>الحالة</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows}
-      </tbody>
-    </table>
-  </div>
+  <table>
+    <!-- عرض كل عمود بالنسبة المئوية بحيث يكون المجموع 100% دائماً، مهما كان محتوى الصفوف -->
+    <colgroup>
+      <col style="width:13%"> <!-- اسم الطالب -->
+      <col style="width:9%">  <!-- رقم الهاتف -->
+      <col style="width:12%"> <!-- الكلية -->
+      <col style="width:11%"> <!-- التخصص -->
+      <col style="width:13%"> <!-- القسم -->
+      <col style="width:8%">  <!-- بداية التدريب -->
+      <col style="width:8%">  <!-- نهاية التدريب -->
+      <col style="width:8%">  <!-- مدة التدريب -->
+      <col style="width:9%">  <!-- تاريخ التسجيل -->
+      <col style="width:9%">  <!-- الحالة -->
+    </colgroup>
+    <thead>
+      <tr>
+        <th>اسم الطالب</th>
+        <th>رقم الهاتف</th>
+        <th>الكلية</th>
+        <th>التخصص</th>
+        <th>القسم</th>
+        <th>بداية التدريب</th>
+        <th>نهاية التدريب</th>
+        <th>مدة التدريب</th>
+        <th>تاريخ التسجيل</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
 
   <div class="report-footer">
     هذا التقرير صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}
@@ -378,6 +445,12 @@ function buildBulkReportHTML(students, periodInfo = {}){
 </html>`;
 }
 
+/**
+ * فتح نافذة متصفح منبثقة جديدة وكتابة التقرير العام (من buildBulkReportHTML) بداخلها.
+ * إن كانت النوافذ المنبثقة محظورة، تُعرض رسالة تنبيه بدل الفشل الصامت.
+ * @param {Array} students - السجلات الممررة كما هي إلى buildBulkReportHTML
+ * @param {object} periodInfo - حدود الفترة الممررة كما هي إلى buildBulkReportHTML
+ */
 function openBulkStudentsReport(students, periodInfo = {}){
   const reportWindow = window.open("", "_blank", "width=1100,height=780");
   if (!reportWindow){
