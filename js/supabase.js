@@ -1,7 +1,15 @@
 // ============================================================================
 // supabase.js
-// تهيئة Supabase + طبقة الوصول للبيانات (إدراج / جلب)
-// ⚠️ استخدم فقط Anon Key هنا — لا تضع Service Role Key أبداً في كود الواجهة
+// تهيئة عميل Supabase + كل طبقة الوصول للبيانات في مكان واحد: جلب كل
+// السجلات، إدراج سجل لكل قسم مختار عند التسجيل، تعديل سجل، وحذف سجل أو أكثر.
+// كل الأخطاء تُرمى (throw) للأعلى ليتعامل معها المستدعي (عادة عبر
+// describeSupabaseError من js/ui.js ثم showToast) بدل التعامل معها هنا.
+//
+// ⚠️ استخدم فقط Anon Key هنا — لا تضع Service Role Key أبداً في كود الواجهة.
+// الحماية الفعلية للبيانات تأتي بالكامل من سياسات RLS في sql/full_setup.sql
+// (أو ملفات الترقية الفردية)، وليس من إخفاء مفتاح anon فهو عام بطبيعته.
+//
+// القيم الفعلية تُقرأ من js/config.js الذي يجب تحميله *قبل* هذا الملف.
 // ============================================================================
 
 // القيم الفعلية تُقرأ من js/config.js (ملف غير مرفوع لـ Git — انظر config.example.js)
@@ -19,6 +27,14 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const TABLE_NAME = "students";
 
 // -------- تعقيم النصوص قبل العرض (منع XSS) --------
+/**
+ * تعقيم أي نص قبل إدراجه داخل innerHTML، بتحويل الرموز الخاصة
+ * (& < > " ') إلى كياناتها HTML الآمنة، لمنع هجمات XSS من بيانات
+ * قد تحتوي على كود HTML/JS (مثل اسم طالب يحتوي على وسم <script>).
+ * تُستخدم في كل مكان بالمشروع يُدرج فيه نص قادم من القاعدة داخل الصفحة.
+ * @param {*} str - القيمة المطلوب تعقيمها (تُحوَّل تلقائياً إلى نص)
+ * @returns {string} نص آمن للإدراج داخل HTML
+ */
 function escapeHtml(str){
   if (str === null || str === undefined) return "";
   return String(str)
@@ -30,6 +46,12 @@ function escapeHtml(str){
 }
 
 // -------- إدراج متدرب جديد --------
+/**
+ * [دالة قديمة غير مستخدمة حالياً] إدراج سجل متدرب واحد بقسم واحد وفترة واحدة.
+ * استُبدلت بـ insertStudentsWithPeriods() التي تدعم عدة أقسام بفترات مستقلة
+ * في طلب واحد. أُبقيت هنا للتوافق المرجعي فقط.
+ * @param {object} payload - بيانات السجل الواحد
+ */
 async function insertStudent(payload){
   const today = new Date().toISOString().slice(0, 10);
 
@@ -53,6 +75,13 @@ async function insertStudent(payload){
 }
 
 // -------- إدراج سجل مستقل لكل قسم مختار (نفس بيانات الطالب والتواريخ) --------
+/**
+ * [دالة قديمة غير مستخدمة حالياً] إدراج عدة سجلات (قسم لكل سجل) لكنها كانت
+ * تفترض فترة تدريب واحدة مشتركة لكل الأقسام. استُبدلت بـ
+ * insertStudentsWithPeriods() التي تسمح بفترة مختلفة لكل قسم على حدة.
+ * @param {object} base - بيانات الطالب المشتركة
+ * @param {Array<string>} departments - أسماء الأقسام المختارة
+ */
 async function insertStudentsForDepartments(base, departments){
   const today = new Date().toISOString().slice(0, 10);
 
@@ -76,6 +105,15 @@ async function insertStudentsForDepartments(base, departments){
 }
 
 // -------- إدراج سجل مستقل لكل قسم مختار، بفترة تدريب خاصة بكل قسم --------
+/**
+ * الدالة الفعلية المستخدمة عند تسجيل متدرب جديد: تُنشئ سجلاً مستقلاً في قاعدة
+ * البيانات لكل قسم مختار، بنفس بيانات الطالب المشتركة (الاسم، الهاتف،
+ * التخصص، الكلية)، لكن بفترة تدريب (بداية/نهاية) خاصة بكل قسم على حدة،
+ * وبنفس تاريخ التسجيل (اليوم) لكل السجلات المُنشأة معاً في هذا الطلب.
+ * @param {{student_name, phone, specialization, college}} base - بيانات الطالب المشتركة بين كل السجلات
+ * @param {Array<{department, start, end}>} items - قائمة الأقسام المختارة وفترة كل واحد منها
+ * @returns {Array} السجلات التي أنشأتها Supabase فعلياً (مع id لكل سجل)
+ */
 async function insertStudentsWithPeriods(base, items){
   const today = new Date().toISOString().slice(0, 10);
 
@@ -99,7 +137,43 @@ async function insertStudentsWithPeriods(base, items){
   return data;
 }
 
+// -------- تعديل سجل متدرب واحد --------
+/**
+ * تعديل سجل متدرب واحد موجود مسبقاً (تُستخدم من نافذة «✏️ تعديل» في لوحة
+ * التحكم). تستبدل كل الحقول القابلة للتعديل دفعة واحدة، وتتطلب أن تكون سياسة
+ * RLS الخاصة بالتعديل (allow_update_students) مفعّلة في Supabase.
+ * @param {string} id - معرّف UUID للسجل المطلوب تعديله
+ * @param {object} updates - القيم الجديدة لكل الحقول القابلة للتعديل
+ * @returns {Array} السجل بعد التعديل كما أرجعته Supabase
+ */
+async function updateStudentRecord(id, updates){
+  const payload = {
+    student_name: updates.student_name.trim(),
+    phone: String(updates.phone).trim(),
+    specialization: updates.specialization.trim(),
+    college: (updates.college || "").trim() || null,
+    department: updates.department.trim(),
+    training_start: updates.training_start,
+    training_end: updates.training_end,
+  };
+
+  const { data, error } = await supabaseClient
+    .from(TABLE_NAME)
+    .update(payload)
+    .eq("id", id)
+    .select();
+
+  if (error) throw error;
+  return data;
+}
+
 // -------- حذف سجلات متدرب (قسم واحد أو أكثر) عبر معرّفاتها --------
+/**
+ * حذف سجل واحد أو أكثر نهائياً عبر قائمة معرّفاتها (id). تُستخدم لحذف قسم
+ * واحد فقط لطالب متعدد الأقسام، أو لحذف كل أقسام طالب دفعة واحدة. تتطلب أن
+ * تكون سياسة RLS الخاصة بالحذف (allow_delete_students) مفعّلة في Supabase.
+ * @param {Array<string>} ids - قائمة معرّفات UUID للسجلات المطلوب حذفها
+ */
 async function deleteStudentsByIds(ids){
   const { error } = await supabaseClient
     .from(TABLE_NAME)
@@ -110,6 +184,13 @@ async function deleteStudentsByIds(ids){
 }
 
 // -------- جلب جميع سجلات المتدربين --------
+/**
+ * جلب كل سجلات المتدربين من قاعدة البيانات دفعة واحدة، مرتبة من الأحدث
+ * إدراجاً للأقدم (created_at تنازلياً). تُستدعى مرة واحدة عند تحميل لوحة
+ * التحكم؛ كل الفلترة والفرز والترقيم بعد ذلك يحدث محلياً في المتصفح
+ * على النسخة المخزَّنة في state.allStudents دون طلبات إضافية للخادم.
+ * @returns {Array} كل سجلات جدول students
+ */
 async function fetchAllStudents(){
   const { data, error } = await supabaseClient
     .from(TABLE_NAME)
