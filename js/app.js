@@ -1,6 +1,13 @@
 // ============================================================================
 // app.js
-// منطق صفحة التسجيل: اختيار الفئة → الأقسام + فترة تدريب مستقلة لكل قسم + الإرسال
+// منطق صفحة التسجيل (index.html): اختيار الفئة → الأقسام (متعدد الاختيار)
+// + فترة تدريب مستقلة لكل قسم مختار + التحقق من الحقول + إرسال البيانات.
+//
+// الاعتماديات المطلوب تحميلها قبل هذا الملف (بنفس الترتيب في index.html):
+//   1) js/config.js       — بيانات الاتصال بـ Supabase
+//   2) js/departments.js  — يوفر CATEGORIES و getDepartmentIcon()
+//   3) js/ui.js           — يوفر showToast, escapeHtml (عبر supabase.js), calcDurationDays...
+//   4) js/supabase.js     — يوفر insertStudentsWithPeriods() و describeSupabaseError()
 // ============================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -18,6 +25,12 @@ const deptPickerState = {
   dates: new Map(),         // dep -> { start: "yyyy-mm-dd", end: "yyyy-mm-dd" }
 };
 
+/**
+ * تهيئة منتقي «الفئة → الأقسام» بالكامل عند تحميل صفحة التسجيل.
+ * ترسم بطاقات الفئات الأربع، قائمة الأقسام (فارغة حتى يتم اختيار فئة)،
+ * ملخص الأقسام المختارة، وصفوف الفترة التدريبية لكل قسم.
+ * تُستدعى مرة واحدة فقط من مستمع DOMContentLoaded.
+ */
 function initDeptPicker(){
   renderCategoryCards();
   renderDeptChecklist();
@@ -25,6 +38,12 @@ function initDeptPicker(){
   renderPeriods();
 }
 
+/**
+ * رسم بطاقات الفئات الرئيسية الأربع (طبية / طبية مساعدة / إدارية / هندسة وصيانة).
+ * كل بطاقة تعرض شارة صغيرة بعدد الأقسام المختارة من نفس الفئة (إن وُجد)،
+ * وتصبح الفئة «نشطة» (تُبرز شريط أقسامها أسفلها) عند الضغط عليها،
+ * مع إمكانية إلغاء التنشيط بالضغط مرة أخرى على نفس الفئة.
+ */
 function renderCategoryCards(){
   const grid = document.getElementById("categoryGrid");
   grid.innerHTML = CATEGORIES.map(cat => {
@@ -47,6 +66,11 @@ function renderCategoryCards(){
   });
 }
 
+/**
+ * رسم قائمة الأقسام التابعة للفئة النشطة حالياً كبطاقات قابلة للتحديد (checkbox).
+ * إذا لم تكن هناك فئة نشطة، تُعرض رسالة إرشادية بدل القائمة.
+ * كل ضغطة على قسم تستدعي toggleDepartment() لإضافته أو إزالته من الاختيار.
+ */
 function renderDeptChecklist(){
   const hint = document.getElementById("categoryHint");
   const list = document.getElementById("deptChecklist");
@@ -74,6 +98,14 @@ function renderDeptChecklist(){
   });
 }
 
+/**
+ * تبديل حالة اختيار قسم واحد (إضافة أو إزالة) ضمن مجموعة الأقسام المختارة.
+ * عند الإضافة: يُنشأ مُدخل فارغ لفترة التدريب الخاصة بهذا القسم في deptPickerState.dates.
+ * عند الإزالة: يُحذف القسم وفترته المرتبطة به معاً.
+ * تُعيد رسم كل من: بطاقات الفئات، قائمة الأقسام، ملخص الاختيار، وصفوف الفترات،
+ * لأن أياً من هذه الأجزاء قد يتأثر بتغيّر قائمة الأقسام المختارة.
+ * @param {string} dep - اسم القسم المطلوب تبديل حالته
+ */
 function toggleDepartment(dep){
   if (deptPickerState.selected.has(dep)){
     deptPickerState.selected.delete(dep);
@@ -89,6 +121,11 @@ function toggleDepartment(dep){
   if (deptPickerState.selected.size > 0) clearFieldError("department");
 }
 
+/**
+ * رسم شريط ملخص الأقسام المختارة أعلى قسم الفترات: عدد الأقسام بصياغة عربية صحيحة،
+ * وشرائح (chips) قابلة للحذف لكل قسم مختار — الضغط على «✕» في أي شريحة
+ * يستدعي toggleDepartment() لإزالة ذلك القسم بنفس منطق إزالته من القائمة.
+ */
 function renderSelectedSummary(){
   const summary = document.getElementById("selectedSummary");
   const countEl = document.getElementById("selectedCount");
@@ -113,6 +150,11 @@ function renderSelectedSummary(){
 }
 
 // صياغة عربية لعدد الأقسام المختارة (قسم واحد / قسمان / أقسام)
+/**
+ * صياغة عربية نحوياً صحيحة لعدد الأقسام المختارة (قسم واحد / قسمان / ٣-١٠ أقسام / أكثر).
+ * @param {number} n - عدد الأقسام المختارة
+ * @returns {string} النص العربي المناسب للعدد
+ */
 function formatSelectedDeptCount(n){
   if (n === 1) return "قسم واحد";
   if (n === 2) return "قسمان";
@@ -123,6 +165,12 @@ function formatSelectedDeptCount(n){
 // ---------------------------------------------------------------------------
 // فترة تدريب مستقلة لكل قسم مختار
 // ---------------------------------------------------------------------------
+/**
+ * رسم صف فترة تدريب مستقل لكل قسم مختار (تاريخ بداية + نهاية + مدة محسوبة تلقائياً).
+ * كل صف يملك مستمعي أحداث خاصة به لتحديث deptPickerState.dates عند تغيير التاريخ،
+ * وللتحقق الفوري من أن تاريخ النهاية لا يسبق تاريخ البداية، وزر لحذف القسم بالكامل
+ * من الصف مباشرة (يستدعي toggleDepartment() لإزالته).
+ */
 function renderPeriods(){
   const hint = document.getElementById("periodsHint");
   const list = document.getElementById("periodsList");
@@ -199,6 +247,10 @@ function renderPeriods(){
 // ---------------------------------------------------------------------------
 // أدوات التحقق من الحقول
 // ---------------------------------------------------------------------------
+/**
+ * إظهار حالة الخطأ البصرية (حدود حمراء + رسالة الخطأ) لحقل معيّن في النموذج.
+ * @param {string} name - قيمة data-field الخاصة بالحقل المطلوب تمييزه كخاطئ
+ */
 function setFieldError(name){
   const field = document.querySelector(`[data-field="${name}"]`);
   if (!field) return;
@@ -206,6 +258,10 @@ function setFieldError(name){
   const input = field.querySelector("input, select");
   if (input) input.classList.add("error");
 }
+/**
+ * إزالة حالة الخطأ البصرية عن حقل معيّن بعد تصحيحه.
+ * @param {string} name - قيمة data-field الخاصة بالحقل المطلوب مسح خطأه
+ */
 function clearFieldError(name){
   const field = document.querySelector(`[data-field="${name}"]`);
   if (!field) return;
@@ -215,6 +271,13 @@ function clearFieldError(name){
 }
 
 // تتحقق من صلاحية بيانات الطالب الأساسية + كل فترة تدريب لكل قسم مختار
+/**
+ * التحقق الشامل من صحة كل حقول نموذج التسجيل قبل الإرسال إلى Supabase:
+ * الاسم، الهاتف (أرقام فقط)، التخصص، الكلية (إلزامية)، القسم الواحد على الأقل،
+ * وفترة تدريب صحيحة (بداية ونهاية) لكل قسم مختار على حدة.
+ * تُبرز كل الحقول غير الصالحة دفعة واحدة بدل التوقف عند أول خطأ.
+ * @returns {object|null} بيانات النموذج جاهزة للإرسال إن كانت صحيحة، أو null إن وُجد أي خطأ
+ */
 function validateForm(){
   let valid = true;
 
@@ -228,6 +291,7 @@ function validateForm(){
     ["student_name", name.length > 0],
     ["phone", phone.length >= 6 && /^[0-9]+$/.test(phone)],
     ["specialization", specialization.length > 0],
+    ["college", college.length > 0], // الكلية/الجامعة أصبحت حقلاً إلزامياً
     ["department", departments.length > 0],
   ].forEach(([field, ok]) => {
     if (ok) clearFieldError(field); else { setFieldError(field); valid = false; }
@@ -257,6 +321,12 @@ function validateForm(){
 // ---------------------------------------------------------------------------
 // إرسال النموذج إلى Supabase
 // ---------------------------------------------------------------------------
+/**
+ * ربط حدث submit الخاص بنموذج التسجيل: يمنع الإرسال الفتراضي للمتصفح، يمنع النقر
+ * المتكرر أثناء الحفظ (isSubmitting)، يتحقق من الحقول، ثم يستدعي
+ * insertStudentsWithPeriods() لإنشاء سجل مستقل لكل قسم مختار بنفس بيانات الطالب.
+ * عند النجاح: يُفرّغ النموذج بالكامل ويعيد ضبط حالة منتقي الأقسام والفترات.
+ */
 function initFormSubmit(){
   const form = document.getElementById("registerForm");
   const submitBtn = document.getElementById("submitBtn");
