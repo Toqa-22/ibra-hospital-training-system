@@ -1,6 +1,20 @@
 // ============================================================================
 // dashboard.js
-// منطق لوحة إدارة المتدربين: الفئات، بطاقات الأقسام، الفلاتر، الجدول، التقارير، التصدير
+// منطق لوحة إدارة المتدربين (dashboard.html) بالكامل: بطاقات الأقسام، شريط
+// تصفية الفئات، لوحة الفلاتر التسعة، الجدول القابل للفرز/التوسيع/الترقيم،
+// أزرار التعديل والحذف والتقرير لكل سجل، ولوحة طباعة تقرير الفترة المستقلة.
+//
+// الاعتماديات المطلوب تحميلها قبل هذا الملف (بنفس الترتيب في dashboard.html):
+//   1) js/config.js       — بيانات الاتصال بـ Supabase
+//   2) js/departments.js  — يوفر CATEGORIES و groupStudentsByDepartment()
+//   3) js/ui.js           — يوفر showToast, showConfirm, showEditStudentModal,
+//                            calcDurationDays, formatDurationLabel, getTrainingStatus...
+//   4) js/supabase.js     — يوفر fetchAllStudents, updateStudentRecord, deleteStudentsByIds
+//   5) js/report.js       — يوفر openStudentReport() و openBulkStudentsReport()
+//
+// كل البيانات تُجلب مرة واحدة فقط عند تحميل الصفحة (loadStudents) وتُخزَّن في
+// state.allStudents؛ أي فلترة أو فرز أو تعديل أو حذف لاحق يعمل محلياً على هذه
+// النسخة المخزَّنة في المتصفح دون طلب بيانات جديدة من الخادم في كل مرة.
 // ============================================================================
 
 const PAGE_SIZE = 10;
@@ -24,6 +38,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 // ---------------------------------------------------------------------------
 // تحميل البيانات من Supabase
 // ---------------------------------------------------------------------------
+/**
+ * جلب كل سجلات المتدربين من Supabase عبر fetchAllStudents() وتخزينها في state.allStudents،
+ * ثم إعادة رسم بطاقات الأقسام، تعبئة قائمة فلتر الأقسام، ورسم الجدول.
+ * تُستدعى مرة واحدة عند تحميل الصفحة؛ أي تعديل/حذف/إضافة لاحق يُحدّث state.allStudents
+ * محلياً مباشرة بدل إعادة الجلب الكامل من الخادم في كل مرة.
+ */
 async function loadStudents(){
   try {
     state.allStudents = await fetchAllStudents();
@@ -40,6 +60,11 @@ async function loadStudents(){
 // ---------------------------------------------------------------------------
 // شرائح تصفية الفئة الرئيسية (تُطبَّق على بطاقات الأقسام والجدول معاً)
 // ---------------------------------------------------------------------------
+/**
+ * رسم شريط شرائح تصفية الفئة الرئيسية أعلى بطاقات الأقسام (الكل + الفئات الأربع).
+ * الضغط على شريحة يُحدّث state.activeCategory ويُزامن قائمة فلتر الفئة المنسدلة معه،
+ * ثم يعيد رسم بطاقات الأقسام وقائمة فلتر الأقسام (لأنها تعتمد على الفئة النشطة).
+ */
 function renderCategoryChips(){
   const row = document.getElementById("categoryChipRow");
   const chips = [`<div class="category-chip ${state.activeCategory === "" ? "active" : ""}" data-cat="">الكل</div>`]
@@ -71,6 +96,10 @@ function renderCategoryChips(){
   });
 }
 
+/**
+ * تعبئة القائمة المنسدلة «الفئة الرئيسية» في لوحة الفلاتر بكل الفئات الأربع الثابتة
+ * (بخلاف قائمة الأقسام، الفئات لا تتغيّر حسب البيانات فهي دائماً نفس الأربع).
+ */
 function populateCategoryFilterOptions(){
   const select = document.getElementById("f_category");
   select.innerHTML = `<option value="">جميع الفئات</option>` +
@@ -80,6 +109,12 @@ function populateCategoryFilterOptions(){
 // ---------------------------------------------------------------------------
 // بطاقات الأقسام
 // ---------------------------------------------------------------------------
+/**
+ * رسم بطاقات الأقسام في أعلى لوحة التحكم. **مهم:** العدد المعروض في كل بطاقة
+ * هو عدد الطلاب «قيد التدريب حالياً» فقط (تاريخ اليوم بين بداية ونهاية تدريبهم)،
+ * وليس إجمالي كل من سجّل في هذا القسم عبر كل الوقت. إن كانت هناك فئة نشطة،
+ * تُعرض فقط بطاقات الأقسام التابعة لتلك الفئة.
+ */
 function renderDepartmentCards(){
   const grid = document.getElementById("deptGrid");
   const activeStudents = state.allStudents.filter(s => getTrainingStatus(s.training_start, s.training_end).key === "active");
@@ -121,6 +156,12 @@ function renderDepartmentCards(){
   });
 }
 
+/**
+ * تعبئة القائمة المنسدلة «القسم» في لوحة الفلاتر بالأقسام التي لديها سجلات فعلية
+ * فقط (بخلاف بطاقات الأقسام، هذه القائمة تُبنى من كل السجلات وليس النشطة فقط،
+ * ليتمكن المستخدم من البحث حتى عن أقسام ليس فيها متدرب حالياً). إن كانت هناك
+ * فئة نشطة، تُقتصر الخيارات على أقسام تلك الفئة فقط.
+ */
 function populateDepartmentFilterOptions(){
   const select = document.getElementById("f_department");
   const current = select.value;
@@ -139,6 +180,13 @@ function populateDepartmentFilterOptions(){
 // ---------------------------------------------------------------------------
 // الأحداث الثابتة (الفلاتر، الفرز، التصدير)
 // ---------------------------------------------------------------------------
+/**
+ * ربط كل مستمعي الأحداث الثابتة في الصفحة (لا تتغيّر مع كل رسم): حقول البحث
+ * التسعة (بحث فوري مع تأخير debounce)، زر إعادة تعيين الفلاتر، الفرز بالضغط على
+ * رؤوس الأعمدة، وزر «تحميل تقرير PDF» في لوحة الفترة المستقلة. تُستدعى مرة
+ * واحدة فقط عند تحميل الصفحة؛ أزرار كل صف في الجدول (تعديل/حذف/تقرير) تُربط
+ * بشكل منفصل داخل renderTable() لأنها تُعاد كتابتها مع كل إعادة رسم.
+ */
 function bindStaticEvents(){
   const filterIds = ["f_name", "f_phone", "f_spec", "f_category", "f_department", "f_start", "f_end", "f_regdate", "f_status"];
   filterIds.forEach(id => {
@@ -216,6 +264,12 @@ function bindStaticEvents(){
 // ---------------------------------------------------------------------------
 // تطبيق الفلاتر على البيانات الخام (تشمل الفئة الرئيسية والقسم معاً)
 // ---------------------------------------------------------------------------
+/**
+ * تطبيق كل الفلاتر النشطة دفعة واحدة (الاسم، الهاتف، التخصص، الفئة، القسم،
+ * فترة بداية التدريب، تاريخ التسجيل، حالة التدريب) على القائمة الكاملة
+ * state.allStudents، وإرجاع فقط السجلات المطابقة للجميع معاً (AND منطقي).
+ * @returns {Array} السجلات المطابقة لكل الفلاتر الحالية
+ */
 function getFilteredStudents(){
   const name = document.getElementById("f_name").value.trim().toLowerCase();
   const phone = document.getElementById("f_phone").value.trim();
@@ -249,6 +303,14 @@ function getFilteredStudents(){
 // ---------------------------------------------------------------------------
 // تجميع السجلات المتطابقة (نفس الاسم + نفس الهاتف) دون حذف أي سجل
 // ---------------------------------------------------------------------------
+/**
+ * تجميع السجلات المتطابقة في (نفس الاسم + نفس رقم الهاتف، بعد تجاهل حالة الأحرف
+ * والمسافات الزائدة) في مجموعة واحدة، لأن الطالب الذي سجّل في أكثر من قسم
+ * يملك عدة سجلات منفصلة في القاعدة بنفس اسمه وهاتفه. لا يُحذف أو يُدمج أي سجل،
+ * فقط يُعاد ترتيبها بصرياً معاً مع فرز فترات كل طالب من الأحدث للأقدم.
+ * @param {Array} students - السجلات المطلوب تجميعها
+ * @returns {Array} مصفوفة مجموعات {student_name, phone, records[]}
+ */
 function groupDuplicateStudents(students){
   const map = new Map();
   students.forEach(s => {
@@ -263,6 +325,13 @@ function groupDuplicateStudents(students){
   }));
 }
 
+/**
+ * فرز مجموعات الطلاب (بعد التجميع) حسب العمود والاتجاه المختارين حالياً في
+ * state.sortField و state.sortDir. بالنسبة لأعمدة خاصة بسجل واحد (كالقسم أو
+ * التخصص)، يُستخدم أحدث سجل في كل مجموعة كمرجع للفرز.
+ * @param {Array} groups - مجموعات الطلاب الناتجة من groupDuplicateStudents
+ * @returns {Array} نفس المجموعات بعد الفرز
+ */
 function sortGroups(groups){
   const field = state.sortField;
   const dir = state.sortDir === "asc" ? 1 : -1;
@@ -287,6 +356,14 @@ function sortGroups(groups){
 
 // تحديد حالة تمثيلية واحدة لمجموعة أقسام متعددة لنفس الطالب:
 // الأولوية لـ"قيد التدريب" إن وُجد قسم واحد جارٍ حالياً، ثم "لم يبدأ"، وأخيراً "انتهى" إن انتهت كل الأقسام
+/**
+ * اختيار حالة تدريب واحدة «تمثيلية» لعرضها في الصف المُجمَّع (قبل التوسيع)
+ * لطالب لديه أكثر من قسم بحالات مختلفة. الأولوية: إن وُجد قسم واحد على الأقل
+ * «قيد التدريب» تُعرض هذه الحالة، وإلا فإن وُجد قسم «لم يبدأ» تُعرض هي،
+ * وإلا (كل الأقسام منتهية) تُعرض «انتهى».
+ * @param {Array} records - كل سجلات (أقسام) الطالب الواحد
+ * @returns {{label:string, cls:string}} تسمية وصنف CSS لحالة العرض
+ */
 function getGroupStatusSummary(records){
   const statuses = records.map(r => getTrainingStatus(r.training_start, r.training_end).key);
   if (statuses.includes("active")) return { label: "قيد التدريب", cls: "status-active" };
@@ -299,6 +376,14 @@ function getGroupStatusSummary(records){
 // ---------------------------------------------------------------------------
 const REPORT_COLSPAN = 11;
 
+/**
+ * الدالة الرئيسية والأكبر في لوحة التحكم: تُطبّق الفلاتر، تُجمّع السجلات المتكررة،
+ * تفرزها، ترقّمها إلى صفحات، ثم تبني HTML الجدول بالكامل — صف عادي لكل طالب
+ * بقسم واحد، أو صف ملخّص قابل للتوسيع + صف فرعي مخفي لكل قسم لطالب متعدد
+ * الأقسام. بعد إدراج HTML، تربط كل مستمعي أحداث الأزرار من جديد (تعديل، حذف،
+ * تقرير، توسيع/طي) لأن innerHTML الجديد يفقد أي مستمعين سابقين.
+ * تُستدعى بعد أي تغيير يؤثر على البيانات المعروضة (فلترة، فرز، تصفّح، حذف، تعديل).
+ */
 function renderTable(){
   const filtered = getFilteredStudents();
   let groups = groupDuplicateStudents(filtered);
@@ -449,6 +534,13 @@ function renderTable(){
 // ---------------------------------------------------------------------------
 // تعديل بيانات سجل متدرب واحد بعد تأكيد الحفظ من نافذة التعديل
 // ---------------------------------------------------------------------------
+/**
+ * معالجة الضغط على زر «✏️ تعديل» لسجل واحد: تفتح نافذة التعديل مع تعبئتها
+ * بالقيم الحالية، تنتظر قرار المستخدم (حفظ أو إلغاء)، وعند الحفظ تُرسل التعديلات
+ * إلى Supabase عبر updateStudentRecord()، ثم تُحدّث state.allStudents محلياً
+ * بنفس القيم الجديدة بدل إعادة الجلب الكامل، وتُعيد رسم كل الواجهة المتأثرة.
+ * @param {object} record - السجل (القسم الواحد) المطلوب تعديله
+ */
 async function handleEditStudent(record){
   const updates = await showEditStudentModal(record);
   if (!updates) return;
@@ -472,6 +564,14 @@ async function handleEditStudent(record){
 // ---------------------------------------------------------------------------
 // حذف طالب (كل سجلاته عبر جميع الأقسام) بعد تأكيد صريح من المستخدم
 // ---------------------------------------------------------------------------
+/**
+ * معالجة الضغط على زر «🗑 حذف»: تعرض نافذة تأكيد صريحة أولاً (نص مختلف حسب
+ * كون الطالب بقسم واحد أو عدة أقسام)، ولا تُنفّذ أي حذف فعلي إلا بعد موافقة
+ * المستخدم. عند التأكيد، تُحذف كل السجلات الممرّرة دفعة واحدة عبر
+ * deleteStudentsByIds()، وتُزال من state.allStudents محلياً.
+ * @param {{student_name:string, records:Array}} group - مجموعة تحتوي سجلاً واحداً
+ * (حذف قسم واحد فقط) أو عدة سجلات (حذف الطالب بالكامل من كل أقسامه)
+ */
 async function handleDeleteStudent(group){
   const multi = group.records.length > 1;
   const confirmed = await showConfirm({
@@ -498,6 +598,10 @@ async function handleDeleteStudent(group){
   }
 }
 
+/**
+ * تحديث رمز السهم (↕ / ▲ / ▼) بجانب كل عمود قابل للفرز في رأس الجدول،
+ * ليعكس العمود والاتجاه النشطين حالياً في state.sortField و state.sortDir.
+ */
 function updateSortArrows(){
   document.querySelectorAll("#studentsTable thead th[data-sort]").forEach(th => {
     const arrow = th.querySelector(".sort-arrow");
@@ -509,6 +613,13 @@ function updateSortArrows(){
   });
 }
 
+/**
+ * رسم شريط التنقل أسفل الجدول: نص «عرض X - Y من أصل Z»، أزرار أرقام الصفحات
+ * (مع نقاط اختصار «…» عند وجود صفحات كثيرة)، وزري السابق/التالي. يُخفي نفسه
+ * كلياً إن لم توجد نتائج.
+ * @param {number} totalItems - إجمالي عدد المجموعات (الطلاب) بعد الفلترة
+ * @param {number} totalPages - إجمالي عدد الصفحات الناتج
+ */
 function renderPagination(totalItems, totalPages){
   const el = document.getElementById("pagination");
   if (totalItems === 0){ el.innerHTML = ""; return; }
