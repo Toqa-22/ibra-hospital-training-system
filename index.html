@@ -1,18 +1,48 @@
 <!DOCTYPE html>
+<!--
+  ============================================================================
+  index.html — صفحة تسجيل المتدربين
+  ============================================================================
+  الغرض: نموذج تسجيل عربي (RTL) يسمح لموظف قسم التطوير والتوجيه المهني بتسجيل
+  متدرب جديد. يدعم اختيار عدة أقسام دفعة واحدة (عبر فئة رئيسية ثم قسم أو أكثر)
+  بفترة تدريب مستقلة لكل قسم مختار — عند الحفظ يُنشأ سجل منفصل في قاعدة
+  البيانات لكل قسم، وليس سجلاً واحداً يحوي كل الأقسام.
+
+  التبعيات (بترتيب التحميل الإلزامي في أسفل الصفحة):
+    1) عميل Supabase JS من CDN
+    2) js/config.js       — بيانات الاتصال بمشروع Supabase
+    3) js/departments.js  — الفئات والأقسام
+    4) js/ui.js           — عناصر واجهة مشتركة (Toast، تنسيق التواريخ...)
+    5) js/supabase.js     — الاتصال الفعلي بقاعدة البيانات
+    6) js/app.js          — منطق هذه الصفحة تحديداً (يُشغَّل عند DOMContentLoaded)
+
+  راجع أيضاً: dashboard.html (لوحة إدارة المتدربين)، css/style.css (الأنماط
+  المشتركة بين الصفحتين).
+  ============================================================================
+-->
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تسجيل المتدربين | قسم التطوير والتوجيه المهني</title>
+
+<!-- خط Cairo العربي من Google Fonts، يُستخدم في كل الصفحة عبر css/style.css -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
+  <!-- ==========================================================================
+       الشريط العلوي: الشعار + اسم الجهة + التنقل بين صفحتي التسجيل واللوحة
+       مشترك بصرياً مع dashboard.html (نفس البنية تماماً، فقط الرابط النشط يختلف)
+       ========================================================================== -->
   <header class="app-topbar">
     <div class="brand">
+      <!-- شعار وزارة الصحة/المستشفى. إن تعذّر تحميل assets/logo.png يستبدله
+           handleLogoImgError() (معرّفة في js/ui.js) ببديل نصي "ت" تلقائياً -->
       <img class="brand-mark" src="assets/logo.png" alt="شعار المستشفى" onerror="handleLogoImgError(this)">
       <div class="brand-text">
         <h1>وزارة الصحة - مستشفى إبراء - قسم التطوير والتوجيه المهني</h1>
@@ -21,6 +51,7 @@
     </div>
     <nav class="topbar-nav">
       <a href="index.html" class="active">تسجيل متدرب</a>
+      <a href="waiting.html">⏳ قائمة الانتظار</a>
       <a href="dashboard.html">لوحة الإدارة</a>
     </nav>
   </header>
@@ -33,8 +64,15 @@
         <h2>تسجيل المتدربين</h2>
         <p class="subtitle">يرجى تعبئة جميع الحقول أدناه بدقة لإتمام عملية تسجيل المتدرب.</p>
 
+        <!--
+          novalidate: نُعطّل التحقق الافتراضي من المتصفح لأن js/app.js يقوم
+          بتحقق مخصص بالكامل (validateForm في app.js) مع رسائل عربية ووضع
+          "has-error" البصري، بدل رسائل المتصفح الإنجليزية الافتراضية.
+        -->
         <form id="registerForm" novalidate>
           <div class="form-grid">
+
+            <!-- ===== بيانات الطالب الأساسية ===== -->
 
             <div class="field full" data-field="student_name">
               <label>اسم الطالب <span class="req">*</span></label>
@@ -44,6 +82,8 @@
 
             <div class="field" data-field="phone">
               <label>رقم الهاتف <span class="req">*</span></label>
+              <!-- type=number + inputmode=numeric لإظهار لوحة مفاتيح رقمية على الجوال؛
+                   التحقق الفعلي (أرقام فقط، طول لا يقل عن 6) يتم في validateForm() -->
               <input type="number" id="phone" placeholder="9xxxxxxx" inputmode="numeric">
               <div class="error-msg">يرجى إدخال رقم هاتف صحيح</div>
             </div>
@@ -54,26 +94,39 @@
               <div class="error-msg">هذا الحقل مطلوب</div>
             </div>
 
-            <div class="field full">
-              <label>الكلية / الجامعة</label>
+            <!-- حقل الكلية/الجامعة: إلزامي (بناءً على طلب القسم)، ويظهر لاحقاً
+                 في صندوق بيانات الطالب أعلى تقرير كل متدرب (js/report.js) -->
+            <div class="field full" data-field="college">
+              <label>الكلية / الجامعة <span class="req">*</span></label>
               <input type="text" id="college" placeholder="مثال: جامعة السلطان قابوس" autocomplete="off">
+              <div class="error-msg">هذا الحقل مطلوب</div>
             </div>
 
+            <!-- ==========================================================
+                 منتقي «الفئة → الأقسام»: كل المحتوى الديناميكي بداخل
+                 categoryGrid / deptChecklist / selectedSummary تُبنى بالكامل
+                 من JavaScript (initDeptPicker في app.js) وليس هنا في HTML —
+                 هذه العناصر تبدأ فارغة عمداً.
+                 ========================================================== -->
             <div class="field full" data-field="department">
               <label>القسم <span class="req">*</span></label>
 
               <div class="dept-picker">
+                <!-- الخطوة ١: بطاقات الفئات الأربع الثابتة (تُرسم من CATEGORIES في departments.js) -->
                 <div class="dept-step-label">
                   <span class="step-num">١</span> اختيار الفئة
                 </div>
                 <div class="category-grid" id="categoryGrid"></div>
 
+                <!-- الخطوة ٢: أقسام الفئة النشطة فقط (تتغيّر كل مرة تُختار فيها فئة مختلفة) -->
                 <div class="dept-step-label dept-step-2">
                   <span class="step-num">٢</span> اختيار الأقسام
                 </div>
                 <div class="category-list-hint" id="categoryHint">اختر فئة أعلاه لعرض أقسامها</div>
                 <div class="dept-checklist" id="deptChecklist"></div>
 
+                <!-- ملخص كل الأقسام المختارة حتى الآن (عبر كل الفئات معاً)،
+                     مع شرائح قابلة للحذف المباشر لكل قسم -->
                 <div class="selected-summary" id="selectedSummary">
                   <div class="selected-count" id="selectedCount">لم يتم اختيار أي قسم بعد</div>
                   <div class="selected-chips" id="selectedChips"></div>
@@ -83,17 +136,24 @@
               <div class="error-msg">يرجى اختيار قسم واحد على الأقل</div>
             </div>
 
+            <!-- ==========================================================
+                 فترة تدريب مستقلة لكل قسم مختار: صف واحد لكل قسم يظهر تلقائياً
+                 (renderPeriods في app.js) بمجرد اختياره من الأعلى، ويختفي
+                 عند إلغاء اختياره. لا توجد حقول تاريخ ثابتة هنا في HTML.
+                 ========================================================== -->
             <div class="field full" data-field="periods">
               <div class="period-section">
                 <h3>الفترة التدريبية لكل قسم</h3>
-                <p class="period-hint" id="periodsHint">اختر الأقسام أولاً من الأعلى لتحديد فترة التدريب الخاصة بكل قسم.</p>
+                <p class="period-hint" id="periodsHint">اختر الأقسام أولاً من الأعلى لتحديد فترة التدريب الخاصة بكل قسم، أو أضف أي قسم إلى قائمة الانتظار لتحديد فترته لاحقاً.</p>
                 <div class="periods-list" id="periodsList"></div>
               </div>
-              <div class="error-msg">يرجى تحديد فترة تدريب صحيحة لكل قسم مختار</div>
+              <div class="error-msg">يرجى تحديد فترة تدريب صحيحة لكل قسم مختار، أو إضافته إلى قائمة الانتظار</div>
             </div>
 
           </div>
 
+          <!-- زر الحفظ: يُعطَّل ويُظهر دوّارة تحميل أثناء انتظار رد Supabase
+               (setButtonLoading في js/ui.js)، لمنع النقر المتكرر أثناء الحفظ -->
           <button type="submit" class="btn-submit" id="submitBtn">
             <span class="spinner"></span>
             <span class="btn-label">تسجيل</span>
@@ -103,6 +163,10 @@
     </div>
   </main>
 
+  <!-- ==========================================================================
+       ترتيب تحميل السكربتات مهم جداً: كل ملف يعتمد على ما قبله مباشرة.
+       راجع التعليق التوضيحي أعلى كل ملف js/ لمزيد من تفاصيل الاعتماديات.
+       ========================================================================== -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
   <script src="js/departments.js"></script>
