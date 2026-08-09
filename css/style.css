@@ -512,6 +512,61 @@ select:focus-visible,
   gap: 12px;
 }
 @media (max-width: 640px){ .period-row .period-fields{ grid-template-columns:1fr; } }
+/* ============ مفتاح «إضافة إلى قائمة الانتظار» داخل صف الفترة ============ */
+.waitlist-toggle{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  cursor:pointer;
+  user-select:none;
+  margin-bottom:12px;
+}
+.waitlist-toggle input{
+  position:absolute;
+  opacity:0;
+  width:0; height:0;
+}
+.waitlist-toggle .toggle-track{
+  width:38px; height:22px;
+  border-radius:999px;
+  background: var(--border);
+  position:relative;
+  flex-shrink:0;
+  transition: background var(--transition);
+}
+.waitlist-toggle .toggle-thumb{
+  position:absolute;
+  top:2px; right:2px;
+  width:18px; height:18px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition);
+}
+.waitlist-toggle input:checked + .toggle-track{ background: var(--warning); }
+.waitlist-toggle input:checked + .toggle-track .toggle-thumb{ transform: translateX(-16px); }
+.waitlist-toggle input:focus-visible + .toggle-track{ outline:3px solid var(--primary); outline-offset:2px; }
+.waitlist-toggle .toggle-label{
+  font-size:12.5px;
+  font-weight:700;
+  color:#4B5D71;
+}
+.period-row.is-waitlist{
+  border-color: var(--warning);
+  background: var(--warning-light);
+}
+.period-row .waitlist-hint{
+  margin-top:10px;
+  background:#fff;
+  border:1px dashed var(--warning);
+  color:#8A6416;
+  font-size:12px;
+  font-weight:700;
+  padding:10px 12px;
+  border-radius: var(--radius-sm);
+  line-height:1.7;
+}
+
 .period-row .p-field label{
   display:block;
   font-size:12px;
@@ -766,6 +821,9 @@ select:focus-visible,
   .category-card .cat-name{ font-size:11.5px; min-height:0; }
 
   .period-row{ padding: 12px; }
+  .waitlist-toggle{ align-items:flex-start; }
+  .waitlist-toggle .toggle-track{ margin-top:2px; }
+  .waitlist-toggle .toggle-label{ line-height:1.5; }
   .btn-submit{ font-size:14.5px; padding:14px; }
 
   .toast-stack{ left:14px; right:14px; bottom:16px; }
