@@ -144,10 +144,25 @@
             <div class="field full" data-field="periods">
               <div class="period-section">
                 <h3>الفترة التدريبية لكل قسم</h3>
-                <p class="period-hint" id="periodsHint">اختر الأقسام أولاً من الأعلى لتحديد فترة التدريب الخاصة بكل قسم، أو أضف أي قسم إلى قائمة الانتظار لتحديد فترته لاحقاً.</p>
+
+                <!-- اختيار عام واحد لكل الطالب (وليس لكل قسم): إما تحديد فترة
+                     تدريب لكل قسم مختار الآن، أو إضافة الطالب بكل أقسامه
+                     المختارة معاً إلى قائمة الانتظار لتحديد الفترة لاحقاً.
+                     منطق التبديل والعرض في bindTrainingModeToggle() وrenderPeriods() (js/app.js) -->
+                <div class="training-mode-toggle" id="trainingModeToggle">
+                  <button type="button" class="mode-btn active" data-mode="dated">📅 تحديد الفترة التدريبية لكل قسم</button>
+                  <button type="button" class="mode-btn" data-mode="waitlist">⏳ إضافة الطالب إلى قائمة الانتظار</button>
+                </div>
+
+                <p class="period-hint" id="periodsHint">اختر الأقسام أولاً من الأعلى لتحديد فترة التدريب الخاصة بكل قسم.</p>
                 <div class="periods-list" id="periodsList"></div>
+
+                <div class="waitlist-mode-notice" id="waitlistModeNotice" style="display:none">
+                  ⏳ سيُضاف هذا الطالب إلى قائمة الانتظار في جميع الأقسام المختارة أعلاه، دون تحديد فترة تدريب الآن.
+                  يمكن لاحقاً من صفحة «قائمة الانتظار» تحديد فترة كل قسم من أقسامه دفعة واحدة، وعندها ينتقل الطالب تلقائياً إلى لوحة الإدارة بكل أقسامه معاً.
+                </div>
               </div>
-              <div class="error-msg">يرجى تحديد فترة تدريب صحيحة لكل قسم مختار، أو إضافته إلى قائمة الانتظار</div>
+              <div class="error-msg">يرجى تحديد فترة تدريب صحيحة لكل قسم مختار</div>
             </div>
 
           </div>
