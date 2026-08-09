@@ -253,7 +253,166 @@ function showEditStudentModal(record, options = {}){
   });
 }
 
-// -------- تبديل حالة زر التحميل (Spinner) --------
+// -------- نافذة تحديد فترات التدريب لكل أقسام طالب قائمة انتظار دفعة واحدة --------
+/**
+ * التأكد من وجود نافذة «تحديد فترات التدريب» في الصفحة، وإنشاؤها إن لم تكن
+ * موجودة بعد. تُستدعى داخلياً من showAssignMultiPeriodModal() فقط.
+ * @returns {HTMLElement} عنصر الطبقة الخلفية (overlay) لهذه النافذة
+ */
+function ensureAssignPeriodsModal(){
+  let overlay = document.querySelector(".assign-periods-modal-overlay");
+  if (!overlay){
+    overlay = document.createElement("div");
+    overlay.className = "modal-overlay assign-periods-modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal-box edit-modal-box assign-periods-box">
+        <h4 class="m-title">تحديد فترات التدريب ونقل الطالب</h4>
+        <div class="assign-student-summary">
+          <div class="as-name"></div>
+          <div class="as-phone"></div>
+        </div>
+        <div class="periods-list"></div>
+        <p class="e-error"></p>
+        <div class="modal-actions">
+          <button class="m-cancel">إلغاء</button>
+          <button class="m-confirm m-save">حفظ ونقل إلى لوحة الإدارة</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+  return overlay;
+}
+
+/**
+ * عرض نافذة تحديد فترة تدريب مستقلة لكل قسم من أقسام طالب واحد في قائمة
+ * الانتظار دفعة واحدة (تُستخدم حصرياً من زر «📅 تحديد الفترات ونقل الطالب»
+ * في صفحة قائمة الانتظار waiting.html). الطالب قد يكون مسجَّلاً في أكثر من
+ * قسم معاً (كلها بلا فترة بعد)؛ هذه النافذة تعرض صفاً مستقلاً بنفس تصميم
+ * صفوف الفترة في نموذج التسجيل (period-row) لكل قسم من أقسامه، وتفرض تحديد
+ * فترة صحيحة لكل قسم منها قبل قبول الحفظ — فلا يُحفظ شيء حتى تكتمل كل الأقسام.
+ * @param {{student_name:string, phone:string, records:Array}} group - مجموعة سجلات الطالب في قائمة الانتظار (سجل واحد لكل قسم)
+ * @returns {Promise<Array<{id:string, training_start:string, training_end:string}>|null>} قائمة التحديثات لكل سجل عند الحفظ، أو null عند الإلغاء
+ */
+function showAssignMultiPeriodModal(group){
+  return new Promise(resolve => {
+    const overlay = ensureAssignPeriodsModal();
+    const nameEl = overlay.querySelector(".as-name");
+    const phoneEl = overlay.querySelector(".as-phone");
+    const listEl = overlay.querySelector(".periods-list");
+    const errorEl = overlay.querySelector(".e-error");
+
+    nameEl.textContent = group.student_name || "";
+    phoneEl.textContent = group.phone || "";
+    errorEl.textContent = "";
+    errorEl.classList.remove("show");
+
+    // نسخة محلية قابلة للتعديل من تواريخ كل سجل (مفتاحها id السجل)، حتى
+    // لا تُعدَّل بيانات الصفحة الفعلية إلا بعد الضغط على "حفظ" بنجاح
+    const localDates = new Map(group.records.map(r => [r.id, {
+      start: r.training_start || "",
+      end: r.training_end || "",
+    }]));
+
+    function renderRows(){
+      listEl.innerHTML = group.records.map(r => {
+        const d = localDates.get(r.id);
+        return `
+          <div class="period-row" data-id="${r.id}">
+            <div class="period-row-head">
+              <span class="period-dept-name"><span class="dept-tag-icon">${getDepartmentIcon(r.department)}</span>${escapeHtml(r.department)}</span>
+            </div>
+            <div class="period-fields">
+              <div class="p-field">
+                <label>تاريخ بداية التدريب <span class="req">*</span></label>
+                <input type="date" class="p-start" value="${d.start}">
+              </div>
+              <div class="p-field">
+                <label>تاريخ نهاية التدريب <span class="req">*</span></label>
+                <input type="date" class="p-end" value="${d.end}">
+              </div>
+            </div>
+            <div class="period-duration" data-role="duration"><span>⏱ مدة التدريب:</span><span class="num"></span></div>
+            <div class="period-error-inline">تاريخ النهاية لا يمكن أن يسبق تاريخ البداية</div>
+          </div>`;
+      }).join("");
+
+      listEl.querySelectorAll(".period-row").forEach(row => {
+        const id = row.dataset.id;
+        const startInput = row.querySelector(".p-start");
+        const endInput = row.querySelector(".p-end");
+        const durationEl = row.querySelector(".period-duration");
+        const durationNum = durationEl.querySelector(".num");
+
+        function updateRow(){
+          const start = startInput.value;
+          const end = endInput.value;
+          localDates.set(id, { start, end });
+
+          if (!start || !end){
+            durationEl.classList.remove("show");
+            row.classList.remove("has-error");
+            return;
+          }
+          if (new Date(end) < new Date(start)){
+            row.classList.add("has-error");
+            durationEl.classList.remove("show");
+            return;
+          }
+          row.classList.remove("has-error");
+          durationNum.textContent = formatDurationLabel(calcDurationDays(start, end));
+          durationEl.classList.add("show");
+          errorEl.classList.remove("show");
+        }
+
+        startInput.addEventListener("change", updateRow);
+        endInput.addEventListener("change", updateRow);
+      });
+    }
+
+    renderRows();
+    overlay.classList.add("show");
+
+    const cancelBtn = overlay.querySelector(".m-cancel");
+    const confirmBtn = overlay.querySelector(".m-save");
+
+    const cleanup = (result) => {
+      overlay.classList.remove("show");
+      cancelBtn.removeEventListener("click", onCancel);
+      confirmBtn.removeEventListener("click", onConfirm);
+      resolve(result);
+    };
+    const onCancel = () => cleanup(null);
+    const onConfirm = () => {
+      let allValid = true;
+      const updates = [];
+
+      group.records.forEach(r => {
+        const d = localDates.get(r.id) || {};
+        const ok = d.start && d.end && new Date(d.end) >= new Date(d.start);
+        if (!ok) allValid = false;
+        updates.push({ id: r.id, training_start: d.start || null, training_end: d.end || null });
+      });
+
+      if (!allValid){
+        listEl.querySelectorAll(".period-row").forEach(row => {
+          const d = localDates.get(row.dataset.id) || {};
+          const ok = d.start && d.end && new Date(d.end) >= new Date(d.start);
+          row.classList.toggle("has-error", !ok);
+        });
+        errorEl.textContent = "يرجى تحديد فترة تدريب صحيحة لكل قسم قبل الحفظ";
+        errorEl.classList.add("show");
+        return;
+      }
+
+      cleanup(updates);
+    };
+
+    cancelBtn.addEventListener("click", onCancel);
+    confirmBtn.addEventListener("click", onConfirm);
+  });
+}
+
+
 /**
  * تبديل شكل أي زر بين حالته العادية وحالة «جارٍ التحميل» (تعطيل الزر + إظهار
  * دوّارة تحميل صغيرة بداخله). تُستخدم أثناء انتظار رد Supabase لمنع النقر
