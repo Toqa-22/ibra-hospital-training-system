@@ -173,12 +173,20 @@ function ensureEditModal(){
  * عرض نافذة تعديل مُعبّأة مسبقاً بقيم سجل معيّن، مع تحقق فوري من صحة الحقول
  * (كلها إلزامية، الهاتف أرقام فقط، تاريخ النهاية لا يسبق البداية) قبل قبول
  * الحفظ. تُرجع وعداً ينتظر قرار المستخدم.
+ *
+ * تُستخدم في مكانين بنفس المنطق تماماً: (١) «✏️ تعديل» في لوحة التحكم لسجل
+ * له فترة محددة أصلاً، و(٢) «📅 تحديد الفترة» في صفحة قائمة الانتظار لسجل بلا
+ * فترة بعد (حقلا التاريخ يبدآن فارغين، والتحقق يفرض تعبئتهما قبل القبول).
+ * خياران نصيّان اختياريان يخصّصان العنوان وزر الحفظ حسب سياق الاستخدام.
  * @param {object} record - السجل الحالي المطلوب تعديله (لتعبئة الحقول بقيمه)
+ * @param {{title?:string, confirmLabel?:string}} options - نصوص قابلة للتخصيص حسب سياق الاستدعاء
  * @returns {Promise<object|null>} كائن القيم الجديدة عند الحفظ، أو null عند الإلغاء
  */
-function showEditStudentModal(record){
+function showEditStudentModal(record, options = {}){
+  const { title = "تعديل بيانات المتدرب", confirmLabel = "حفظ التعديلات" } = options;
   return new Promise(resolve => {
     const overlay = ensureEditModal();
+    const titleEl = overlay.querySelector(".m-title");
     const nameInput = overlay.querySelector(".e-name");
     const phoneInput = overlay.querySelector(".e-phone");
     const collegeInput = overlay.querySelector(".e-college");
@@ -188,6 +196,7 @@ function showEditStudentModal(record){
     const endInput = overlay.querySelector(".e-end");
     const errorEl = overlay.querySelector(".e-error");
 
+    titleEl.textContent = title;
     nameInput.value = record.student_name || "";
     phoneInput.value = record.phone || "";
     collegeInput.value = record.college || "";
@@ -202,6 +211,7 @@ function showEditStudentModal(record){
 
     const cancelBtn = overlay.querySelector(".m-cancel");
     const confirmBtn = overlay.querySelector(".m-save");
+    confirmBtn.textContent = confirmLabel;
 
     const cleanup = (result) => {
       overlay.classList.remove("show");
