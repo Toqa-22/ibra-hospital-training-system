@@ -126,6 +126,42 @@ async function insertStudentsWithPeriods(base, items){
     training_start: item.start,
     training_end: item.end,
     registration_date: today,
+    is_waitlist: false,
+  }));
+
+  const { data, error } = await supabaseClient
+    .from(TABLE_NAME)
+    .insert(records)
+    .select();
+
+  if (error) throw error;
+  return data;
+}
+
+// -------- إدراج سجل قائمة انتظار مستقل لكل قسم مختار (بدون فترة تدريب) --------
+/**
+ * تُستخدم عند تسجيل متدرب مع اختيار «إضافة إلى قائمة الانتظار» لقسم واحد أو
+ * أكثر بدل تحديد فترة تدريب فورية: تُنشئ سجلاً مستقلاً لكل قسم من هذه الأقسام
+ * بنفس بيانات الطالب المشتركة، لكن بدون training_start/training_end (تبقى
+ * فارغة حتى تُحدَّد لاحقاً من صفحة waiting.html)، وبعلامة is_waitlist=true
+ * التي تُخفيها عن لوحة الإدارة وتُظهرها فقط في قائمة الانتظار.
+ * @param {{student_name, phone, specialization, college}} base - بيانات الطالب المشتركة
+ * @param {Array<string>} departments - أسماء الأقسام المطلوب إضافتها لقائمة الانتظار
+ * @returns {Array} السجلات التي أنشأتها Supabase فعلياً (مع id لكل سجل)
+ */
+async function insertWaitlistStudents(base, departments){
+  const today = new Date().toISOString().slice(0, 10);
+
+  const records = departments.map(dep => ({
+    student_name: base.student_name.trim(),
+    phone: String(base.phone).trim(),
+    specialization: base.specialization.trim(),
+    college: (base.college || "").trim() || null,
+    department: dep.trim(),
+    training_start: null,
+    training_end: null,
+    registration_date: today,
+    is_waitlist: true,
   }));
 
   const { data, error } = await supabaseClient
@@ -139,9 +175,13 @@ async function insertStudentsWithPeriods(base, items){
 
 // -------- تعديل سجل متدرب واحد --------
 /**
- * تعديل سجل متدرب واحد موجود مسبقاً (تُستخدم من نافذة «✏️ تعديل» في لوحة
- * التحكم). تستبدل كل الحقول القابلة للتعديل دفعة واحدة، وتتطلب أن تكون سياسة
- * RLS الخاصة بالتعديل (allow_update_students) مفعّلة في Supabase.
+ * تعديل سجل متدرب واحد موجود مسبقاً. تُستخدم في مكانين: (١) من نافذة
+ * «✏️ تعديل» في لوحة التحكم لتعديل سجل له فترة محددة أصلاً، و(٢) من زر
+ * «📅 تحديد الفترة» في صفحة قائمة الانتظار (waiting.html) لتحديد فترة تدريب
+ * سجل كان بلا فترة — وفي الحالتين معاً تضبط is_waitlist=false صراحة، لأن أي
+ * سجل يمر بهذه الدالة أصبح له الآن فترة تدريب صحيحة (يتطلبها showEditStudentModal
+ * قبل القبول)، فيختفي تلقائياً من قائمة الانتظار ويظهر في لوحة الإدارة.
+ * تتطلب أن تكون سياسة RLS الخاصة بالتعديل (allow_update_students) مفعّلة.
  * @param {string} id - معرّف UUID للسجل المطلوب تعديله
  * @param {object} updates - القيم الجديدة لكل الحقول القابلة للتعديل
  * @returns {Array} السجل بعد التعديل كما أرجعته Supabase
@@ -155,6 +195,7 @@ async function updateStudentRecord(id, updates){
     department: updates.department.trim(),
     training_start: updates.training_start,
     training_end: updates.training_end,
+    is_waitlist: false,
   };
 
   const { data, error } = await supabaseClient
@@ -183,18 +224,39 @@ async function deleteStudentsByIds(ids){
   if (error) throw error;
 }
 
-// -------- جلب جميع سجلات المتدربين --------
+// -------- جلب سجلات المتدربين الذين لديهم فترة تدريب محددة (لوحة الإدارة) --------
 /**
- * جلب كل سجلات المتدربين من قاعدة البيانات دفعة واحدة، مرتبة من الأحدث
- * إدراجاً للأقدم (created_at تنازلياً). تُستدعى مرة واحدة عند تحميل لوحة
- * التحكم؛ كل الفلترة والفرز والترقيم بعد ذلك يحدث محلياً في المتصفح
+ * جلب سجلات المتدربين الذين لديهم فترة تدريب محددة فقط (is_waitlist = false)،
+ * مرتبة من الأحدث إدراجاً للأقدم (created_at تنازلياً). تُستدعى مرة واحدة عند
+ * تحميل لوحة التحكم؛ كل الفلترة والفرز والترقيم بعد ذلك يحدث محلياً في المتصفح
  * على النسخة المخزَّنة في state.allStudents دون طلبات إضافية للخادم.
- * @returns {Array} كل سجلات جدول students
+ * سجلات قائمة الانتظار (is_waitlist = true) مُستبعدة عمداً هنا — راجع
+ * fetchWaitlistStudents() لجلبها في صفحة waiting.html.
+ * @returns {Array} سجلات جدول students التي لها فترة تدريب محددة
  */
 async function fetchAllStudents(){
   const { data, error } = await supabaseClient
     .from(TABLE_NAME)
     .select("*")
+    .eq("is_waitlist", false)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+// -------- جلب سجلات قائمة الانتظار (بلا فترة تدريب محددة بعد) --------
+/**
+ * جلب سجلات المتدربين الذين أُضيفوا لقسم دون تحديد فترة تدريب فورية
+ * (is_waitlist = true)، مرتبة من الأحدث تسجيلاً للأقدم. تُستخدم حصرياً في
+ * صفحة قائمة الانتظار (waiting.html وjs/waiting.js).
+ * @returns {Array} سجلات جدول students التي بلا فترة تدريب محددة بعد
+ */
+async function fetchWaitlistStudents(){
+  const { data, error } = await supabaseClient
+    .from(TABLE_NAME)
+    .select("*")
+    .eq("is_waitlist", true)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
