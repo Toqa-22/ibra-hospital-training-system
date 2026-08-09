@@ -512,59 +512,49 @@ select:focus-visible,
   gap: 12px;
 }
 @media (max-width: 640px){ .period-row .period-fields{ grid-template-columns:1fr; } }
-/* ============ مفتاح «إضافة إلى قائمة الانتظار» داخل صف الفترة ============ */
-.waitlist-toggle{
+/* ============ اختيار عام: تحديد الفترة الآن أو إضافة الطالب لقائمة الانتظار ============ */
+.training-mode-toggle{
   display:flex;
-  align-items:center;
-  gap:10px;
-  cursor:pointer;
-  user-select:none;
-  margin-bottom:12px;
+  gap:8px;
+  margin-bottom:16px;
 }
-.waitlist-toggle input{
-  position:absolute;
-  opacity:0;
-  width:0; height:0;
-}
-.waitlist-toggle .toggle-track{
-  width:38px; height:22px;
-  border-radius:999px;
-  background: var(--border);
-  position:relative;
-  flex-shrink:0;
-  transition: background var(--transition);
-}
-.waitlist-toggle .toggle-thumb{
-  position:absolute;
-  top:2px; right:2px;
-  width:18px; height:18px;
-  border-radius:50%;
+.training-mode-toggle .mode-btn{
+  flex:1;
+  padding:11px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
   background:#fff;
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--transition);
+  color: var(--text-muted);
+  font-family:inherit;
+  font-weight:800;
+  font-size:12.8px;
+  cursor:pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition), transform var(--transition);
 }
-.waitlist-toggle input:checked + .toggle-track{ background: var(--warning); }
-.waitlist-toggle input:checked + .toggle-track .toggle-thumb{ transform: translateX(-16px); }
-.waitlist-toggle input:focus-visible + .toggle-track{ outline:3px solid var(--primary); outline-offset:2px; }
-.waitlist-toggle .toggle-label{
-  font-size:12.5px;
-  font-weight:700;
-  color:#4B5D71;
+.training-mode-toggle .mode-btn:hover{ transform: translateY(-1px); }
+.training-mode-toggle .mode-btn.active[data-mode="dated"]{
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
 }
-.period-row.is-waitlist{
+.training-mode-toggle .mode-btn.active[data-mode="waitlist"]{
   border-color: var(--warning);
   background: var(--warning-light);
-}
-.period-row .waitlist-hint{
-  margin-top:10px;
-  background:#fff;
-  border:1px dashed var(--warning);
   color:#8A6416;
-  font-size:12px;
+}
+@media (max-width:480px){
+  .training-mode-toggle{ flex-direction:column; }
+}
+
+.waitlist-mode-notice{
+  background:#fff;
+  border: 1.5px dashed var(--warning);
+  color:#8A6416;
+  font-size:13px;
   font-weight:700;
-  padding:10px 12px;
+  padding: 16px 18px;
   border-radius: var(--radius-sm);
-  line-height:1.7;
+  line-height:1.8;
 }
 
 .period-row .p-field label{
@@ -786,6 +776,27 @@ select:focus-visible,
   .edit-form{ grid-template-columns: 1fr; }
 }
 
+/* ============ نافذة تحديد فترات التدريب لعدة أقسام (قائمة الانتظار) ============ */
+.assign-periods-box{
+  max-width: 600px;
+  text-align: right;
+}
+.assign-periods-box .m-title{ text-align:center; margin-bottom:14px; }
+.assign-periods-box .assign-student-summary{
+  text-align:center;
+  margin-bottom:16px;
+  padding-bottom:14px;
+  border-bottom:1px dashed var(--border);
+}
+.assign-periods-box .as-name{ font-size:15.5px; font-weight:800; color: var(--text); }
+.assign-periods-box .as-phone{ font-size:12.5px; color: var(--text-muted); margin-top:3px; font-weight:600; }
+.assign-periods-box .periods-list{
+  max-height: 320px;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+  margin-bottom: 6px;
+}
+
 /* ============ الاستجابة لجميع أحجام الشاشات ============ */
 
 /* شاشات كبيرة جداً: سقف مريح لعرض القراءة */
@@ -821,9 +832,6 @@ select:focus-visible,
   .category-card .cat-name{ font-size:11.5px; min-height:0; }
 
   .period-row{ padding: 12px; }
-  .waitlist-toggle{ align-items:flex-start; }
-  .waitlist-toggle .toggle-track{ margin-top:2px; }
-  .waitlist-toggle .toggle-label{ line-height:1.5; }
   .btn-submit{ font-size:14.5px; padding:14px; }
 
   .toast-stack{ left:14px; right:14px; bottom:16px; }
