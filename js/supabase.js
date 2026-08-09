@@ -175,12 +175,11 @@ async function insertWaitlistStudents(base, departments){
 
 // -------- تعديل سجل متدرب واحد --------
 /**
- * تعديل سجل متدرب واحد موجود مسبقاً. تُستخدم في مكانين: (١) من نافذة
- * «✏️ تعديل» في لوحة التحكم لتعديل سجل له فترة محددة أصلاً، و(٢) من زر
- * «📅 تحديد الفترة» في صفحة قائمة الانتظار (waiting.html) لتحديد فترة تدريب
- * سجل كان بلا فترة — وفي الحالتين معاً تضبط is_waitlist=false صراحة، لأن أي
- * سجل يمر بهذه الدالة أصبح له الآن فترة تدريب صحيحة (يتطلبها showEditStudentModal
- * قبل القبول)، فيختفي تلقائياً من قائمة الانتظار ويظهر في لوحة الإدارة.
+ * تعديل سجل متدرب واحد موجود مسبقاً (تُستخدم من نافذة «✏️ تعديل» في لوحة
+ * التحكم). تستبدل كل الحقول القابلة للتعديل دفعة واحدة. تضبط is_waitlist=false
+ * صراحة كإجراء احترازي فقط (السجلات التي تصل لهذه الدالة من لوحة التحكم
+ * أصلاً غير موجودة في قائمة الانتظار)؛ لا علاقة لها بمنطق قائمة الانتظار
+ * الفعلي — راجع assignTrainingPeriods() أدناه لذلك.
  * تتطلب أن تكون سياسة RLS الخاصة بالتعديل (allow_update_students) مفعّلة.
  * @param {string} id - معرّف UUID للسجل المطلوب تعديله
  * @param {object} updates - القيم الجديدة لكل الحقول القابلة للتعديل
@@ -206,6 +205,37 @@ async function updateStudentRecord(id, updates){
 
   if (error) throw error;
   return data;
+}
+
+// -------- تحديد فترة تدريب لكل أقسام طالب واحد في قائمة الانتظار دفعة واحدة --------
+/**
+ * تُستخدم حصرياً من زر «📅 تحديد الفترات ونقل الطالب» في صفحة قائمة الانتظار
+ * (waiting.html): تُحدِّث فترة تدريب (بداية/نهاية) كل سجل من سجلات طالب واحد
+ * (سجل واحد لكل قسم من أقسامه) في طلب واحد، وتضبط is_waitlist=false لكل
+ * سجل منها — فتنتقل كل أقسام الطالب معاً من قائمة الانتظار إلى لوحة الإدارة
+ * دفعة واحدة، بدل الانتقال قسماً تلو الآخر. لا تُعدِّل أي حقل آخر (الاسم،
+ * الهاتف، القسم...) فهذه تبقى كما هي.
+ * تتطلب أن تكون سياسة RLS الخاصة بالتعديل (allow_update_students) مفعّلة.
+ * @param {Array<{id:string, training_start:string, training_end:string}>} updates - تحديث فترة كل سجل عبر معرّفه
+ * @returns {Array} كل السجلات بعد التعديل كما أرجعتها Supabase
+ */
+async function assignTrainingPeriods(updates){
+  const results = await Promise.all(updates.map(u =>
+    supabaseClient
+      .from(TABLE_NAME)
+      .update({
+        training_start: u.training_start,
+        training_end: u.training_end,
+        is_waitlist: false,
+      })
+      .eq("id", u.id)
+      .select()
+  ));
+
+  const failed = results.find(r => r.error);
+  if (failed) throw failed.error;
+
+  return results.flatMap(r => r.data || []);
 }
 
 // -------- حذف سجلات متدرب (قسم واحد أو أكثر) عبر معرّفاتها --------
