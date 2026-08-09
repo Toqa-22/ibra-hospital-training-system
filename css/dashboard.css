@@ -212,6 +212,10 @@
 @media (max-width:980px){ .filters-grid{ grid-template-columns: repeat(2,1fr);} }
 @media (max-width:520px){ .filters-grid{ grid-template-columns: 1fr;} }
 
+/* نسخة بعمودين فقط لصفحات بها عدد فلاتر أقل (مثل waiting.html) */
+.filters-grid.filters-grid-narrow{ grid-template-columns: repeat(2, minmax(0,320px)); }
+@media (max-width:640px){ .filters-grid.filters-grid-narrow{ grid-template-columns: 1fr; } }
+
 .filters-grid .f-field label{
   display:block; font-size:12px; font-weight:700; margin-bottom:6px; color:#4B5D71;
 }
@@ -332,6 +336,36 @@ table.students-table{
 .status-upcoming::before{ background:#0F6CBD; }
 .status-ended{ background: var(--gray-status-light); color:#5B6B7C; }
 .status-ended::before{ background:#8A97A6; }
+.status-waiting{ background: var(--warning-light); color:#8A6416; }
+.status-waiting::before{ background: var(--warning); }
+
+/* جدول قائمة الانتظار: عدد أعمدة أقل من جدول لوحة الإدارة، فلا حاجة لنفس
+   العرض الأدنى الكبير (1260px) المخصص لجدول المتدربين الكامل */
+table.students-table.waiting-table{ min-width: 760px; }
+
+/* ===== شريط إحصاء سريع أعلى قائمة الانتظار ===== */
+.waiting-stat-banner{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  background: linear-gradient(135deg, var(--warning-light), var(--secondary-light));
+  border:1.5px solid var(--warning);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.waiting-stat-banner .w-icon{
+  width:44px; height:44px;
+  border-radius:12px;
+  background:#fff;
+  color: var(--warning);
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px;
+  flex-shrink:0;
+}
+.waiting-stat-banner .w-text strong{ font-size:20px; color:#8A6416; }
+.waiting-stat-banner .w-text p{ margin:2px 0 0; font-size:12.8px; color:#5B6B7C; font-weight:600; }
 
 .count-badge{
   background: var(--secondary-light); color:var(--secondary);
@@ -471,6 +505,7 @@ table.students-table{
   .dept-card{ padding:14px; }
   .dept-card .dept-name{ font-size:13px; min-height:auto; }
   .table-scroll-hint{ display:flex; }
+  .waiting-stat-banner{ padding:14px 16px; }
 }
 
 @media (max-width: 480px){
@@ -497,4 +532,3 @@ table.students-table{
     transition-duration: 0.001ms !important;
   }
 }
-
