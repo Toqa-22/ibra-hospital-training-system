@@ -23,6 +23,7 @@ const deptPickerState = {
   activeCategoryId: null,
   selected: new Set(),      // أسماء الأقسام المختارة، بترتيب الاختيار
   dates: new Map(),         // dep -> { start: "yyyy-mm-dd", end: "yyyy-mm-dd" }
+  waitlist: new Set(),      // أسماء الأقسام المختارة كـ"قائمة انتظار" (بلا فترة تدريب فورية)
 };
 
 /**
@@ -110,6 +111,7 @@ function toggleDepartment(dep){
   if (deptPickerState.selected.has(dep)){
     deptPickerState.selected.delete(dep);
     deptPickerState.dates.delete(dep);
+    deptPickerState.waitlist.delete(dep);
   } else {
     deptPickerState.selected.add(dep);
     deptPickerState.dates.set(dep, { start: "", end: "" });
@@ -166,10 +168,14 @@ function formatSelectedDeptCount(n){
 // فترة تدريب مستقلة لكل قسم مختار
 // ---------------------------------------------------------------------------
 /**
- * رسم صف فترة تدريب مستقل لكل قسم مختار (تاريخ بداية + نهاية + مدة محسوبة تلقائياً).
- * كل صف يملك مستمعي أحداث خاصة به لتحديث deptPickerState.dates عند تغيير التاريخ،
- * وللتحقق الفوري من أن تاريخ النهاية لا يسبق تاريخ البداية، وزر لحذف القسم بالكامل
- * من الصف مباشرة (يستدعي toggleDepartment() لإزالته).
+ * رسم صف فترة تدريب مستقل لكل قسم مختار (تاريخ بداية + نهاية + مدة محسوبة تلقائياً)،
+ * مع مفتاح تبديل لكل صف يسمح باختيار «إضافة إلى قائمة الانتظار» بدل تحديد فترة
+ * فورية — عندئذ تُخفى حقول التاريخ ويُضاف القسم لاحقاً كسجل بلا فترة (راجع
+ * insertWaitlistStudents في js/supabase.js)، ليُحدَّد له فترة لاحقاً من صفحة
+ * قائمة الانتظار (waiting.html) فينتقل تلقائياً إلى لوحة الإدارة عندها.
+ * كل صف يملك مستمعي أحداث خاصة به لتحديث deptPickerState.dates/waitlist عند
+ * تغيير التاريخ أو المفتاح، وللتحقق الفوري من أن تاريخ النهاية لا يسبق تاريخ
+ * البداية، وزر لحذف القسم بالكامل من الصف مباشرة (يستدعي toggleDepartment()).
  */
 function renderPeriods(){
   const hint = document.getElementById("periodsHint");
@@ -185,13 +191,21 @@ function renderPeriods(){
 
   list.innerHTML = depts.map(dep => {
     const d = deptPickerState.dates.get(dep) || { start: "", end: "" };
+    const isWaitlist = deptPickerState.waitlist.has(dep);
     return `
-      <div class="period-row" data-dep="${escapeHtml(dep)}">
+      <div class="period-row ${isWaitlist ? "is-waitlist" : ""}" data-dep="${escapeHtml(dep)}">
         <div class="period-row-head">
           <span class="period-dept-name"><span class="dept-tag-icon">${getDepartmentIcon(dep)}</span>${escapeHtml(dep)}</span>
           <button type="button" class="period-row-remove" aria-label="إزالة القسم">✕</button>
         </div>
-        <div class="period-fields">
+
+        <label class="waitlist-toggle">
+          <input type="checkbox" class="p-waitlist-check" ${isWaitlist ? "checked" : ""}>
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">⏳ إضافة إلى قائمة الانتظار (تحديد فترة التدريب لاحقاً)</span>
+        </label>
+
+        <div class="period-fields" ${isWaitlist ? 'style="display:none"' : ""}>
           <div class="p-field">
             <label>تاريخ بداية التدريب <span class="req">*</span></label>
             <input type="date" class="p-start" value="${d.start || ""}">
@@ -203,6 +217,11 @@ function renderPeriods(){
         </div>
         <div class="period-duration" data-role="duration"><span>⏱ مدة التدريب:</span><span class="num"></span></div>
         <div class="period-error-inline">تاريخ النهاية لا يمكن أن يسبق تاريخ البداية</div>
+
+        <div class="waitlist-hint" ${isWaitlist ? "" : 'style="display:none"'}>
+          ⏳ سيُضاف هذا القسم إلى قائمة الانتظار بدون تحديد فترة تدريب الآن.
+          يمكن تحديد الفترة لاحقاً من صفحة «قائمة الانتظار»، وعندها ينتقل الطالب تلقائياً إلى لوحة الإدارة.
+        </div>
       </div>`;
   }).join("");
 
@@ -212,6 +231,7 @@ function renderPeriods(){
     const endInput = row.querySelector(".p-end");
     const durationEl = row.querySelector(".period-duration");
     const durationNum = durationEl.querySelector(".num");
+    const waitlistCheck = row.querySelector(".p-waitlist-check");
 
     function updateRow(){
       const start = startInput.value;
@@ -237,6 +257,16 @@ function renderPeriods(){
 
     startInput.addEventListener("change", updateRow);
     endInput.addEventListener("change", updateRow);
+
+    waitlistCheck.addEventListener("change", () => {
+      if (waitlistCheck.checked){
+        deptPickerState.waitlist.add(dep);
+      } else {
+        deptPickerState.waitlist.delete(dep);
+      }
+      renderPeriods();
+      clearFieldError("periods");
+    });
 
     row.querySelector(".period-row-remove").addEventListener("click", () => {
       toggleDepartment(dep);
@@ -297,10 +327,12 @@ function validateForm(){
     if (ok) clearFieldError(field); else { setFieldError(field); valid = false; }
   });
 
-  // تحقق من فترة كل قسم على حدة
+  // تحقق من فترة كل قسم على حدة — الأقسام المضافة لقائمة الانتظار مُستثناة
+  // من هذا التحقق عمداً، فهي بالتعريف بلا فترة تدريب محددة بعد.
   let periodsValid = departments.length > 0;
   document.querySelectorAll(".period-row").forEach(row => {
     const dep = row.dataset.dep;
+    if (deptPickerState.waitlist.has(dep)) return; // لا حاجة لفترة، القسم في قائمة الانتظار
     const d = deptPickerState.dates.get(dep) || {};
     const ok = d.start && d.end && new Date(d.end) >= new Date(d.start);
     row.classList.toggle("has-error", !ok);
@@ -311,8 +343,11 @@ function validateForm(){
   if (!valid) return null;
 
   const items = departments.map(dep => {
+    if (deptPickerState.waitlist.has(dep)){
+      return { department: dep, waitlist: true };
+    }
     const d = deptPickerState.dates.get(dep);
-    return { department: dep, start: d.start, end: d.end };
+    return { department: dep, start: d.start, end: d.end, waitlist: false };
   });
 
   return { name, phone, specialization, college, items };
@@ -353,23 +388,35 @@ function initFormSubmit(){
     setButtonLoading(submitBtn, true);
 
     try {
-      // إنشاء سجل مستقل لكل قسم مختار، بفترة تدريب خاصة به
-      await insertStudentsWithPeriods(
-        {
-          student_name: values.name,
-          phone: values.phone,
-          specialization: values.specialization,
-          college: values.college,
-        },
-        values.items
-      );
+      const base = {
+        student_name: values.name,
+        phone: values.phone,
+        specialization: values.specialization,
+        college: values.college,
+      };
 
-      const deptWord = values.items.length === 1 ? "قسم واحد" : `${values.items.length} أقسام`;
-      showToast(`تم تسجيل المتدرب بنجاح في ${deptWord}`, "success");
+      // تقسيم الأقسام المختارة إلى مجموعتين: أقسام بفترة محددة (تُدرج مباشرة
+      // بلوحة الإدارة) وأقسام قائمة انتظار (تُدرج بلا فترة، وتُحدَّد لاحقاً
+      // من صفحة قائمة الانتظار)
+      const datedItems = values.items.filter(i => !i.waitlist);
+      const waitlistItems = values.items.filter(i => i.waitlist);
+
+      if (datedItems.length > 0){
+        await insertStudentsWithPeriods(base, datedItems);
+      }
+      if (waitlistItems.length > 0){
+        await insertWaitlistStudents(base, waitlistItems.map(i => i.department));
+      }
+
+      const parts = [];
+      if (datedItems.length > 0) parts.push(`${datedItems.length} بفترة محددة`);
+      if (waitlistItems.length > 0) parts.push(`${waitlistItems.length} ضمن قائمة الانتظار`);
+      showToast(`تم تسجيل المتدرب بنجاح (${parts.join(" و")})`, "success");
 
       form.reset();
       deptPickerState.selected.clear();
       deptPickerState.dates.clear();
+      deptPickerState.waitlist.clear();
       deptPickerState.activeCategoryId = null;
       renderCategoryCards();
       renderDeptChecklist();
