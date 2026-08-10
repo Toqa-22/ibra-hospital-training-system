@@ -1,9 +1,10 @@
 // ============================================================================
 // report.js
 // بناء تقريرين قابلين للطباعة/الحفظ كـ PDF عبر خاصية الطباعة في المتصفح
-// (بدون أي مكتبة PDF خارجية)، وطباعتهما تلقائياً بفتح نافذة/تبويب جديد
-// وكتابة محتوى التقرير بداخله مباشرة (document.write)، ثم إغلاقه تلقائياً
-// بعد انتهاء الطباعة — راجع تعليق printReportHTML() لتفاصيل الآلية:
+// (بدون أي مكتبة PDF خارجية)، وطباعتهما تلقائياً على نفس الصفحة الحالية دون
+// أي فتح نافذة/تبويب جديد أو زر طباعة — راجع تعليق printReportHTML() لتفاصيل
+// الآلية (حاوية مخفية + CSS خاص بالطباعة فقط، وهذا أثبت أنه الأسلوب الوحيد
+// الموثوق فعلياً على متصفحات الجوال بعد فشل عدة طرق أخرى):
 //   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «🖨️ طباعة»
 //      لكل صف في جدول لوحة التحكم.
 //   2) تقرير عام لعدة متدربين معاً (buildBulkReportHTML/openBulkStudentsReport)
@@ -209,52 +210,108 @@ function buildReportHTML(group){
 }
 
 /**
- * فتح نافذة/تبويب جديد فارغ (about:blank) وكتابة محتوى التقرير بداخله مباشرة
- * عبر document.write، ثم طباعته فوراً وبشكل متزامن — بلا حاجة لأي زر طباعة
- * داخل صفحة التقرير نفسها إطلاقاً (تلقائي بالكامل). بمجرد إغلاق نافذة
- * الطباعة (سواء بالحفظ أو الإلغاء)، تُغلق نافذة التقرير نفسها تلقائياً
- * وتختفي، دون أي أثر يبقى على صفحة لوحة التحكم — لأن هذا الأسلوب لا يمسّ
- * DOM الصفحة الأصلية إطلاقاً (بعكس أسلوب سابق كان يُدرِج محتوى التقرير
- * مؤقتاً داخل نفس صفحة لوحة التحكم، وثبت أنه قد يُفسد حالتها).
+ * طباعة تقرير مباشرة على نفس الصفحة الحالية — بدون فتح أي نافذة/تبويب جديد
+ * إطلاقاً، وبدون استبدال المستند (document.write): تُدرِج محتوى التقرير في
+ * حاوية مخفية داخل الصفحة الحالية نفسها، وتُضيف قواعد CSS خاصة بالطباعة فقط
+ * (@media print) تُخفي كل عناصر الصفحة الأخرى وتُظهر هذه الحاوية فقط أثناء
+ * الطباعة الفعلية — فتبقى الصفحة كما هي تماماً بصرياً طوال الوقت (المستخدم لا
+ * يرى أي تغيير على الشاشة، ولا أي زر، ولا أي صفحة جديدة إطلاقاً)، وما إن
+ * ينتهي أمر الطباعة (حفظ أو إلغاء) حتى تُزال الحاوية والقواعد المؤقتة تلقائياً.
  *
- * ملاحظة مهمة جداً: الطباعة تُستدعى هنا مباشرة بعد document.write/close، وليس
- * بانتظار حدث "load" على النافذة الجديدة كما كانت محاولة سابقة — لأن حدث
- * "load" لا يُطلَق إطلاقاً بعد document.write حتى على نافذة فارغة جديدة تماماً
- * (تأكد هذا فعلياً بالاختبار: النافذة تصل لحالة readyState="complete" فوراً،
- * لكن حدث load نفسه لا يحدث أبداً في هذه الحالة تحديداً). الانتظار له كان
- * يمنع الطباعة من الانطلاق إطلاقاً، وهذا بالضبط ما كان يسبب توقف الطباعة عن
- * العمل بعد إضافته.
+ * لماذا هذا الأسلوب تحديداً، بعد تجربة عدة طرق سابقة فشلت جميعها على الجوال:
+ * — نافذة/تبويب منفصل (window.open + document.write أو رابط Blob): جُرِّب
+ *   بعدة صيغ مختلفة، وأظهر خطأ صريح من متصفح Chrome على أندرويد فعلياً
+ *   ("حدثت مشكلة أثناء طباعة الصفحة") — أي أن توليد معاينة الطباعة نفسها كان
+ *   يفشل تماماً لمحتوى نافذة منفصلة على بعض أجهزة الجوال، بصرف النظر عن كيفية
+ *   فتحها أو توقيت استدعاء print() عليها.
+ * — إطار مخفٍ (iframe): بعض متصفحات الجوال تطبع فقط النافذة العلوية دائماً،
+ *   متجاهلةً تماماً استدعاء print() على أي إطار فرعي بداخلها.
+ *
+ * أما هذا الأسلوب (حاوية مخفية + CSS خاص بالطباعة داخل نفس الصفحة الحية) فلا
+ * يحتاج أي نافذة أخرى، ولا أي تنقّل (navigation)، ولا استبدال أي مستند — لذلك
+ * لا يوجد أي احتمال لفشل توليد معاينة الطباعة بسبب "نافذة منفصلة"، لأنه لا
+ * توجد نافذة منفصلة من الأساس: هي نفسها الصفحة المرئية أمام المستخدم دائماً.
+ *
+ * ملاحظة تقنية: تُفصل قواعد @page (حجم/هامش الصفحة عند الطباعة) عن بقية
+ * القواعد قبل التغليف، لأن @page لا يصح تضمينها داخل @media بحسب مواصفات CSS
+ * (ستُتجاهل من المتصفح لو غُلِّفت). بقية القواعد (كل تنسيقات التقرير: الخط،
+ * الجدول، الألوان...) تُغلَّف كاملة داخل @media print{...} حتى لا تؤثر إطلاقاً
+ * على شكل الصفحة أثناء العرض العادي (خارج لحظة الطباعة الفعلية فقط).
+ *
+ * التنظيف بعد انتهاء الطباعة يعتمد على أكثر من إشارة معاً (أيهما يحدث أولاً):
+ * حدث afterprint، وحدث focus (بتأخير بسيط لتفادي التقاط تركيز زائف فوري)،
+ * ومهلة احتياطية قصوى (دقيقتان) تضمن عدم بقاء أي أثر عالق على الصفحة مهما
+ * حدث. كل العملية مُغلَّفة بـ try/catch أيضاً، فلو حدث أي خطأ غير متوقع تظهر
+ * رسالة تنبيه واضحة بدل ترك الصفحة في حالة غير متسقة بصمت.
  *
  * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
  * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
  */
 function printReportHTML(html){
-  const reportWindow = window.open("", "_blank");
-  if (!reportWindow){
+  try {
+    const parser = new DOMParser();
+    const reportDoc = parser.parseFromString(html, "text/html");
+    const bodyInnerHTML = reportDoc.body.innerHTML;
+    const rawCss = Array.from(reportDoc.querySelectorAll("style")).map(s => s.textContent).join("\n");
+
+    // فصل قواعد @page (يجب أن تبقى أعلى مستوى الملف، لا يصح تضمينها داخل @media)
+    const pageRuleRegex = /@page[^{]*\{[^{}]*\}/g;
+    const pageRules = (rawCss.match(pageRuleRegex) || []).join("\n");
+    const otherCss = rawCss.replace(pageRuleRegex, "");
+
+    // إزالة أي بقايا من طباعة سابقة لم تُنظَّف (احتياط فقط، نادراً ما يحدث)
+    const prevContainer = document.getElementById("__printReportContainer");
+    if (prevContainer) prevContainer.remove();
+    const prevStyle = document.getElementById("__printReportStyle");
+    if (prevStyle) prevStyle.remove();
+
+    const styleEl = document.createElement("style");
+    styleEl.id = "__printReportStyle";
+    styleEl.textContent = `
+      #__printReportContainer{ display:none; }
+      @media print{
+        body > *:not(#__printReportContainer){ display:none !important; }
+        #__printReportContainer{ display:block !important; }
+      }
+      ${pageRules}
+      @media print{ ${otherCss} }
+    `;
+    document.head.appendChild(styleEl);
+
+    const container = document.createElement("div");
+    container.id = "__printReportContainer";
+    container.innerHTML = bodyInnerHTML;
+    document.body.appendChild(container);
+
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      window.removeEventListener("afterprint", cleanup);
+      window.removeEventListener("focus", cleanup);
+      clearTimeout(safetyTimer);
+      if (container.parentNode) container.remove();
+      if (styleEl.parentNode) styleEl.remove();
+    };
+    window.addEventListener("afterprint", cleanup);
+    const safetyTimer = setTimeout(cleanup, 120000); // مهلة احتياطية قصوى: دقيقتان
+
+    window.focus();
+    window.print();
+
+    // نُسجِّل الاستماع لحدث focus (إشارة احتياطية ثانية) بعد تأخير قصير فقط،
+    // لتفادي التقاط أي حدث تركيز زائف فوري ناتج عن استدعاء window.focus() نفسه
+    setTimeout(() => window.addEventListener("focus", cleanup), 400);
+  } catch (err){
+    console.error("فشلت طباعة التقرير:", err);
+    const c = document.getElementById("__printReportContainer");
+    if (c) c.remove();
+    const s = document.getElementById("__printReportStyle");
+    if (s) s.remove();
     if (typeof showToast === "function"){
-      showToast("يرجى السماح بالنوافذ المنبثقة لطباعة التقرير", "warning");
+      showToast("تعذّرت طباعة التقرير، يرجى إعادة المحاولة", "error");
     }
-    return;
   }
-
-  reportWindow.document.open();
-  reportWindow.document.write(html);
-  reportWindow.document.close();
-
-  let closed = false;
-  const closeReportWindow = () => {
-    if (closed) return;
-    closed = true;
-    clearTimeout(safetyTimer);
-    try { reportWindow.close(); } catch (err){ /* تجاهل */ }
-  };
-  // مهلة احتياطية قصوى: تضمن عدم بقاء نافذة التقرير مفتوحة إلى الأبد حتى لو
-  // فشل حدث afterprint في الانطلاق لأي سبب على بعض المتصفحات
-  const safetyTimer = setTimeout(closeReportWindow, 120000); // دقيقتان
-
-  reportWindow.addEventListener("afterprint", closeReportWindow);
-  reportWindow.focus();
-  reportWindow.print();
 }
 
 /**
