@@ -1,9 +1,8 @@
 // ============================================================================
 // report.js
 // بناء تقريرين قابلين للطباعة/الحفظ كـ PDF عبر خاصية الطباعة في المتصفح
-// (بدون أي مكتبة PDF خارجية)، وطباعتهما مباشرة بدون فتح أي نافذة أو تبويب
-// منفصل — راجع تعليق printReportHTML() لتفاصيل الآلية (ولماذا تستبدل محتوى
-// التبويب الحالي مؤقتاً بدل استخدام إطار مخفٍ، بسبب قيود الطباعة على الجوال):
+// (بدون أي مكتبة PDF خارجية)، وفتحهما في تبويب/نافذة مستقلة خاصة بالتقرير مع
+// طباعة تلقائية وإغلاق تلقائي بعد الطباعة — راجع تعليق printReportHTML() لتفاصيل الآلية:
 //   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «🖨️ طباعة»
 //      لكل صف في جدول لوحة التحكم.
 //   2) تقرير عام لعدة متدربين معاً (buildBulkReportHTML/openBulkStudentsReport)
@@ -142,7 +141,13 @@ function buildReportHTML(group){
 
   .table-wrap{ overflow-x:auto; }
 
-  @media print{ body{ padding:0 24px; } }
+  .print-bar{ text-align:center; margin-bottom:20px; }
+  .print-bar button{
+    background:#0A8F6A; color:#fff; border:none; padding:10px 22px;
+    border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
+    font-family:'Cairo', Tahoma, sans-serif;
+  }
+  @media print{ .print-bar{ display:none; } body{ padding:0 24px; } }
 
   @media (max-width: 640px){
     body{ padding: 22px 16px; }
@@ -154,6 +159,10 @@ function buildReportHTML(group){
 </style>
 </head>
 <body>
+
+  <div class="print-bar">
+    <button onclick="window.print()">🖨️ طباعة</button>
+  </div>
 
   <div class="report-header">
     <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
@@ -209,42 +218,44 @@ function buildReportHTML(group){
 }
 
 /**
- * طباعة صفحة HTML تقرير مباشرة، بلا فتح أي نافذة أو تبويب منبثق منفصل: تستبدل
- * محتوى التبويب الحالي مؤقتاً بمحتوى التقرير نفسه، تستدعي الطباعة عليه فوراً،
- * ثم تُعيد تحميل الصفحة الأصلية تلقائياً بعد إغلاق نافذة الطباعة.
+ * فتح تقرير في تبويب/نافذة منفصلة خاصة به (سياق تصفح علوي حقيقي، وليس إطاراً
+ * مخفياً ولا استبدالاً لمحتوى التبويب الحالي)، مع تشغيل الطباعة تلقائياً فور
+ * اكتمال التحميل، وإغلاق تلك النافذة تلقائياً بمجرد إغلاق نافذة الطباعة (سواء
+ * ضغط المستخدم "حفظ" أو "إلغاء") عبر الحدث afterprint. زر «🖨️ طباعة» يبقى
+ * ظاهراً أعلى صفحة التقرير نفسه، يدوياً، لإعادة الطباعة إن أُلغيت بالخطأ.
  *
- * لماذا ليس إطاراً مخفياً (iframe) كما كانت سابقاً: أغلب متصفحات الجوال (Safari
- * على آيفون، ومتصفحات أندرويد المختلفة) تطبع فقط التبويب/النافذة العلوية دائماً
- * — تتجاهل تماماً استدعاء print() على نافذة إطار فرعي بداخلها، فكانت النتيجة
- * على الجوال طباعة صفحة لوحة التحكم نفسها خلف الإطار بدل التقرير. الحل الموثوق
- * على كل المنصات هو استبدال محتوى النافذة العلوية نفسها مؤقتاً بالتقرير، لأن
- * هذه هي النافذة الوحيدة التي تضمن كل المتصفحات طباعتها فعلياً.
+ * لماذا نافذة/تبويب حقيقي وليس إطاراً مخفياً (iframe) أو استبدال المستند في
+ * نفس التبويب: كلتا الطريقتين جُرِّبتا سابقاً وفشلتا على أغلب متصفحات الجوال
+ * (Safari على آيفون، ومتصفحات أندرويد المختلفة) — إما لأن هذه المتصفحات تطبع
+ * فقط النافذة العلوية الأصلية متجاهلةً أي إطار فرعي بداخلها، أو لأن استبدال
+ * المستند عبر document.write يخرج عن نطاق "بادرة المستخدم" المطلوبة لتشغيل
+ * الطباعة بشكل موثوق. أما فتح نافذة/تبويب جديد عبر window.open() فهو نفسه
+ * سياق تصفح علوي مستقل، فيُضمن طباعته بشكل صحيح على كل المنصات.
  *
- * مهم جداً: window.print() يُستدعى هنا بشكل متزامن (Synchronous) فور
- * document.write()، وليس داخل Promise أو setTimeout كما كانت محاولة سابقة —
- * لأن أغلب متصفحات الجوال (خاصة Safari) تشترط أن يكون استدعاء print() جزءاً
- * مباشراً من نفس سلسلة استدعاء لمسة/نقرة المستخدم (نفس الـ call stack الأصلي
- * لحدث click)؛ أي تأخير ولو بسيط (عبر then()‎ أو setTimeout) يفصل الاستدعاء
- * عن "بادرة المستخدم" فيتجاهله المتصفح بصمت أو يطبع محتوى قديماً/خاطئاً بدل
- * التقرير — وهذا بالضبط ما كان يسبب ظهور التقرير على الشاشة بشكل صحيح لكن
- * طباعة صفحة أخرى فعلياً على الجوال.
- *
+ * تُستخدم رابط Blob حقيقي (وليس نافذة فارغة يُكتب بداخلها بـ document.write)
+ * حتى لا يظهر عنوان النافذة/التبويب كـ "about:blank" — فيظهر بدلاً منه عنوان
+ * التقرير الفعلي (وسم <title> بداخل الصفحة، وهو اسم الطالب في تقرير الفرد).
+ * إن كانت النوافذ المنبثقة محظورة في المتصفح، تُعرض رسالة تنبيه بدل الفشل الصامت.
  * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
  * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
  */
 function printReportHTML(html){
-  const restoreAndReload = () => {
-    window.removeEventListener("afterprint", restoreAndReload);
-    location.reload();
-  };
+  const blobUrl = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const reportWindow = window.open(blobUrl, "_blank");
+  if (!reportWindow){
+    showToast("يرجى السماح بالنوافذ المنبثقة لعرض التقرير", "warning");
+    URL.revokeObjectURL(blobUrl);
+    return;
+  }
 
-  document.open();
-  document.write(html);
-  document.close();
-
-  window.addEventListener("afterprint", restoreAndReload);
-  window.focus();
-  window.print();
+  reportWindow.addEventListener("load", () => {
+    URL.revokeObjectURL(blobUrl);
+    reportWindow.addEventListener("afterprint", () => {
+      reportWindow.close();
+    });
+    reportWindow.focus();
+    reportWindow.print();
+  });
 }
 
 /**
@@ -389,8 +400,15 @@ function buildBulkReportHTML(students, periodInfo = {}){
     border-top:1px dashed #E3E8EE; padding-top:14px;
   }
 
-  /* عند الطباعة الفعلية: نزيل الحشو الإضافي لأن @page يضبط الهامش الفعلي */
+  /* عند الطباعة الفعلية: نخفي زر الطباعة نفسه، ونزيل الحشو الإضافي لأن @page يضبط الهامش الفعلي */
+  .print-bar{ text-align:center; margin-bottom:20px; }
+  .print-bar button{
+    background:#0A8F6A; color:#fff; border:none; padding:10px 22px;
+    border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
+    font-family:'Cairo', Tahoma, sans-serif;
+  }
   @media print{
+    .print-bar{ display:none; }
     body{ padding:0; max-width:none; }
   }
 
@@ -403,6 +421,10 @@ function buildBulkReportHTML(students, periodInfo = {}){
 </style>
 </head>
 <body>
+
+  <div class="print-bar">
+    <button onclick="window.print()">🖨️ طباعة</button>
+  </div>
 
   <div class="report-header">
     <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
@@ -460,9 +482,9 @@ function buildBulkReportHTML(students, periodInfo = {}){
 }
 
 /**
- * طباعة التقرير العام لعدة متدربين معاً (من buildBulkReportHTML) مباشرة عبر
- * printReportHTML() — بنفس منطق openStudentReport() تماماً، بلا صفحة تقرير
- * وسيطة مرئية (راجع تعليق printReportHTML() أعلاه لتفاصيل آلية الطباعة).
+ * فتح التقرير العام لعدة متدربين معاً (من buildBulkReportHTML) عبر
+ * printReportHTML() — بنفس منطق openStudentReport() تماماً
+ * (راجع تعليق printReportHTML() أعلاه لتفاصيل الآلية).
  * @param {Array} students - السجلات الممررة كما هي إلى buildBulkReportHTML
  * @param {object} periodInfo - حدود الفترة الممررة كما هي إلى buildBulkReportHTML
  */
