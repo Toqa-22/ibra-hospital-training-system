@@ -1,8 +1,9 @@
 // ============================================================================
 // report.js
 // بناء تقريرين قابلين للطباعة/الحفظ كـ PDF عبر خاصية الطباعة في المتصفح
-// (بدون أي مكتبة PDF خارجية)، وطباعتهما مباشرة عبر إطار مخفٍ (iframe) بلا أي
-// نافذة أو تبويب تقرير وسيط يراه المستخدم — راجع تعليق printReportHTML() لتفاصيل الآلية:
+// (بدون أي مكتبة PDF خارجية)، وطباعتهما مباشرة بدون فتح أي نافذة أو تبويب
+// منفصل — راجع تعليق printReportHTML() لتفاصيل الآلية (ولماذا تستبدل محتوى
+// التبويب الحالي مؤقتاً بدل استخدام إطار مخفٍ، بسبب قيود الطباعة على الجوال):
 //   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «🖨️ طباعة»
 //      لكل صف في جدول لوحة التحكم.
 //   2) تقرير عام لعدة متدربين معاً (buildBulkReportHTML/openBulkStudentsReport)
@@ -208,55 +209,51 @@ function buildReportHTML(group){
 }
 
 /**
- * طباعة صفحة HTML تقرير مباشرة دون فتح أي نافذة أو تبويب منبثق مرئي: تُنشئ
- * إطاراً بأبعاد حقيقية (وليس 0×0) لكن موضوعاً خارج حدود الشاشة تماماً، تُحمِّل
- * محتوى التقرير بداخله عبر رابط Blob (وليس عبر document.write، الذي قد يتسبب
- * أحياناً بحدثي "load" متضاربين مع تحميل about:blank الأولي للإطار)، وتستدعي
- * طباعته تلقائياً فور اكتمال تحميله — فتظهر نافذة الطباعة مباشرة فوق الصفحة
- * الحالية بنقرة واحدة على «🖨️ طباعة» من الجدول، دون أي "صفحة تقرير" وسيطة
- * يراها المستخدم أو يحتاج يضغط بداخلها زر طباعة ثانٍ.
+ * طباعة صفحة HTML تقرير مباشرة، بلا فتح أي نافذة أو تبويب منبثق منفصل: تستبدل
+ * محتوى التبويب الحالي مؤقتاً بمحتوى التقرير نفسه، تستدعي الطباعة عليه، ثم
+ * تُعيد تحميل الصفحة الأصلية تلقائياً بعد إغلاق نافذة الطباعة.
  *
- * ملاحظة مهمة عن الأبعاد: الإطار يُعطى عرضاً وارتفاعاً حقيقيين (بدل 0×0 أو
- * visibility:hidden كما كانت سابقاً) لأن أغلب متصفحات الجوال (خاصة Safari على
- * آيفون، وكثير من متصفحات أندرويد) لا تُنسّق ولا تطبع محتوى إطار بأبعاد صفرية
- * أو مخفٍّ بـ visibility:hidden — فينتج عنه طباعة فارغة أو ناقصة على الجوال
- * حتى لو ظهرت التوصيف صحيحة على الحاسوب المكتبي. لذلك يُستخدم بدلاً من ذلك
- * إخفاء بصري عبر تحريك الإطار خارج نطاق الشاشة المرئي (position: fixed مع
- * إحداثيات سالبة كبيرة)، مع إبقاء أبعاده الفعلية طبيعية ليُنسَّق محتواه
- * ويُطبع بشكل صحيح على كل الأجهزة.
+ * لماذا ليس إطاراً مخفياً (iframe) كما كانت سابقاً: أغلب متصفحات الجوال (Safari
+ * على آيفون، ومتصفحات أندرويد المختلفة) تطبع فقط التبويب/النافذة العلوية دائماً
+ * — تتجاهل تماماً استدعاء print() على نافذة إطار فرعي بداخلها، فكانت النتيجة
+ * على الجوال طباعة صفحة لوحة التحكم نفسها خلف الإطار بدل التقرير. الحل الموثوق
+ * على كل المنصات هو استبدال محتوى النافذة العلوية نفسها مؤقتاً بالتقرير، لأن
+ * هذه هي النافذة الوحيدة التي تضمن كل المتصفحات طباعتها فعلياً.
  *
- * الإطار يُزال تلقائياً من الصفحة بعد إغلاق نافذة الطباعة (عبر الحدث afterprint).
  * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
  * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
  */
 function printReportHTML(html){
-  const blobUrl = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const restoreAndReload = () => {
+    window.removeEventListener("afterprint", restoreAndReload);
+    location.reload();
+  };
 
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.top = "0";
-  iframe.style.left = "-10000px"; // خارج حدود الشاشة تماماً، وليس مخفياً بحجم صفري
-  iframe.style.width = "1200px";
-  iframe.style.height = "900px";
-  iframe.style.border = "0";
+  document.open();
+  document.write(html);
+  document.close();
 
-  iframe.addEventListener("load", () => {
-    URL.revokeObjectURL(blobUrl);
-    const iframeWindow = iframe.contentWindow;
-    iframeWindow.addEventListener("afterprint", () => {
-      if (iframe.parentNode) iframe.remove();
-    });
-    iframeWindow.focus();
-    iframeWindow.print();
-  });
+  // ملاحظة مهمة: حدث "load" على window لا يتكرر أبداً بعد استبدال المستند
+  // عبر document.write() على النافذة الحالية (بخلاف تحميل src جديد في iframe) —
+  // لذلك لا يصح انتظاره هنا؛ ننتظر بدلاً منه اكتمال تحميل الخطوط عبر
+  // document.fonts.ready (مع حد زمني أقصى احتياطي) لضمان طباعة التقرير بتنسيقه
+  // الصحيح بدل إطلاق الطباعة فوراً قبل اكتمال الخط الخارجي من Google Fonts.
+  const triggerPrint = () => {
+    window.addEventListener("afterprint", restoreAndReload);
+    window.focus();
+    window.print();
+  };
 
-  iframe.src = blobUrl;
-  document.body.appendChild(iframe);
+  const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
+  Promise.race([
+    fontsReady,
+    new Promise(resolve => setTimeout(resolve, 800)), // حد أقصى احتياطي إن تأخر تحميل الخط
+  ]).then(triggerPrint);
 }
 
 /**
  * طباعة تقرير طالب واحد (من buildReportHTML) مباشرة عبر printReportHTML() —
- * راجع تعليقها أعلاه لتفاصيل آلية الطباعة عبر إطار مخفٍ بلا صفحة وسيطة.
+ * راجع تعليقها أعلاه لتفاصيل الآلية.
  * @param {object} group - بيانات الطالب الممررة كما هي إلى buildReportHTML
  */
 function openStudentReport(group){
