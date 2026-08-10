@@ -1,8 +1,10 @@
 // ============================================================================
 // report.js
 // بناء تقريرين قابلين للطباعة/الحفظ كـ PDF عبر خاصية الطباعة في المتصفح
-// (بدون أي مكتبة PDF خارجية):
-//   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «⬇ تقرير»
+// (بدون أي مكتبة PDF خارجية)، وطباعتهما تلقائياً بفتح نافذة/تبويب جديد
+// وكتابة محتوى التقرير بداخله مباشرة (document.write)، ثم إغلاقه تلقائياً
+// بعد انتهاء الطباعة — راجع تعليق printReportHTML() لتفاصيل الآلية:
+//   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «🖨️ طباعة»
 //      لكل صف في جدول لوحة التحكم.
 //   2) تقرير عام لعدة متدربين معاً (buildBulkReportHTML/openBulkStudentsReport)
 //      — من لوحة «🖨️ طباعة تقرير لفترة محددة» المستقلة عن فلاتر البحث،
@@ -56,10 +58,11 @@ function buildReportHTML(group){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تقرير المتدرب — ${escapeHtml(group.student_name)}</title>
+<title>${escapeHtml(group.student_name)}</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   *{ box-sizing:border-box; }
+  @page{ size: A4 portrait; margin: 12mm; }
   body{
     font-family:'Cairo', Tahoma, sans-serif;
     direction: rtl;
@@ -137,15 +140,9 @@ function buildReportHTML(group){
     z-index:1;
   }
 
-  .print-bar{ text-align:center; margin-bottom:20px; }
-  .print-bar button{
-    background:#0A8F6A; color:#fff; border:none; padding:10px 22px;
-    border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
-    font-family:'Cairo', Tahoma, sans-serif;
-  }
-  @media print{ .print-bar{ display:none; } body{ padding:0 24px; } }
-
   .table-wrap{ overflow-x:auto; }
+
+  @media print{ body{ padding:0 24px; } }
 
   @media (max-width: 640px){
     body{ padding: 22px 16px; }
@@ -157,10 +154,6 @@ function buildReportHTML(group){
 </style>
 </head>
 <body>
-
-  <div class="print-bar">
-    <button onclick="window.print()">🖨️ طباعة / حفظ كـ PDF</button>
-  </div>
 
   <div class="report-header">
     <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
@@ -208,7 +201,7 @@ function buildReportHTML(group){
 
   <div class="report-footer">
     <img class="stamp-img" src="${stampUrl}" alt="ختم المستشفى" onerror="this.remove()">
-    <span>هذا التقرير صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}</span>
+    <span>هذا الطلب صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}</span>
   </div>
 
 </body>
@@ -216,19 +209,61 @@ function buildReportHTML(group){
 }
 
 /**
- * فتح نافذة متصفح منبثقة جديدة وكتابة تقرير الطالب (من buildReportHTML) بداخلها.
- * إن كانت النوافذ المنبثقة محظورة في المتصفح، تُعرض رسالة تنبيه بدل الفشل الصامت.
+ * فتح نافذة/تبويب جديد فارغ (about:blank) وكتابة محتوى التقرير بداخله مباشرة
+ * عبر document.write، ثم طباعته فوراً وبشكل متزامن — بلا حاجة لأي زر طباعة
+ * داخل صفحة التقرير نفسها إطلاقاً (تلقائي بالكامل). بمجرد إغلاق نافذة
+ * الطباعة (سواء بالحفظ أو الإلغاء)، تُغلق نافذة التقرير نفسها تلقائياً
+ * وتختفي، دون أي أثر يبقى على صفحة لوحة التحكم — لأن هذا الأسلوب لا يمسّ
+ * DOM الصفحة الأصلية إطلاقاً (بعكس أسلوب سابق كان يُدرِج محتوى التقرير
+ * مؤقتاً داخل نفس صفحة لوحة التحكم، وثبت أنه قد يُفسد حالتها).
+ *
+ * ملاحظة مهمة جداً: الطباعة تُستدعى هنا مباشرة بعد document.write/close، وليس
+ * بانتظار حدث "load" على النافذة الجديدة كما كانت محاولة سابقة — لأن حدث
+ * "load" لا يُطلَق إطلاقاً بعد document.write حتى على نافذة فارغة جديدة تماماً
+ * (تأكد هذا فعلياً بالاختبار: النافذة تصل لحالة readyState="complete" فوراً،
+ * لكن حدث load نفسه لا يحدث أبداً في هذه الحالة تحديداً). الانتظار له كان
+ * يمنع الطباعة من الانطلاق إطلاقاً، وهذا بالضبط ما كان يسبب توقف الطباعة عن
+ * العمل بعد إضافته.
+ *
+ * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
+ * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
+ */
+function printReportHTML(html){
+  const reportWindow = window.open("", "_blank");
+  if (!reportWindow){
+    if (typeof showToast === "function"){
+      showToast("يرجى السماح بالنوافذ المنبثقة لطباعة التقرير", "warning");
+    }
+    return;
+  }
+
+  reportWindow.document.open();
+  reportWindow.document.write(html);
+  reportWindow.document.close();
+
+  let closed = false;
+  const closeReportWindow = () => {
+    if (closed) return;
+    closed = true;
+    clearTimeout(safetyTimer);
+    try { reportWindow.close(); } catch (err){ /* تجاهل */ }
+  };
+  // مهلة احتياطية قصوى: تضمن عدم بقاء نافذة التقرير مفتوحة إلى الأبد حتى لو
+  // فشل حدث afterprint في الانطلاق لأي سبب على بعض المتصفحات
+  const safetyTimer = setTimeout(closeReportWindow, 120000); // دقيقتان
+
+  reportWindow.addEventListener("afterprint", closeReportWindow);
+  reportWindow.focus();
+  reportWindow.print();
+}
+
+/**
+ * طباعة تقرير طالب واحد (من buildReportHTML) مباشرة عبر printReportHTML() —
+ * راجع تعليقها أعلاه لتفاصيل الآلية.
  * @param {object} group - بيانات الطالب الممررة كما هي إلى buildReportHTML
  */
 function openStudentReport(group){
-  const reportWindow = window.open("", "_blank", "width=900,height=760");
-  if (!reportWindow){
-    showToast("يرجى السماح بالنوافذ المنبثقة لعرض التقرير", "warning");
-    return;
-  }
-  reportWindow.document.open();
-  reportWindow.document.write(buildReportHTML(group));
-  reportWindow.document.close();
+  printReportHTML(buildReportHTML(group));
 }
 
 // ============================================================================
@@ -364,15 +399,8 @@ function buildBulkReportHTML(students, periodInfo = {}){
     border-top:1px dashed #E3E8EE; padding-top:14px;
   }
 
-  .print-bar{ text-align:center; margin-bottom:20px; }
-  .print-bar button{
-    background:#0A8F6A; color:#fff; border:none; padding:10px 22px;
-    border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
-    font-family:'Cairo', Tahoma, sans-serif;
-  }
-  /* عند الطباعة الفعلية: نخفي زر الطباعة نفسه، ونزيل الحشو الإضافي لأن @page يضبط الهامش الفعلي */
+  /* عند الطباعة الفعلية: نزيل الحشو الإضافي لأن @page يضبط الهامش الفعلي */
   @media print{
-    .print-bar{ display:none; }
     body{ padding:0; max-width:none; }
   }
 
@@ -385,10 +413,6 @@ function buildBulkReportHTML(students, periodInfo = {}){
 </style>
 </head>
 <body>
-
-  <div class="print-bar">
-    <button onclick="window.print()">🖨️ طباعة / حفظ كـ PDF</button>
-  </div>
 
   <div class="report-header">
     <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
@@ -438,7 +462,7 @@ function buildBulkReportHTML(students, periodInfo = {}){
   </table>
 
   <div class="report-footer">
-    هذا التقرير صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}
+    هذا الطلب صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}
   </div>
 
 </body>
@@ -446,18 +470,12 @@ function buildBulkReportHTML(students, periodInfo = {}){
 }
 
 /**
- * فتح نافذة متصفح منبثقة جديدة وكتابة التقرير العام (من buildBulkReportHTML) بداخلها.
- * إن كانت النوافذ المنبثقة محظورة، تُعرض رسالة تنبيه بدل الفشل الصامت.
+ * فتح التقرير العام لعدة متدربين معاً (من buildBulkReportHTML) عبر
+ * printReportHTML() — بنفس منطق openStudentReport() تماماً
+ * (راجع تعليق printReportHTML() أعلاه لتفاصيل الآلية).
  * @param {Array} students - السجلات الممررة كما هي إلى buildBulkReportHTML
  * @param {object} periodInfo - حدود الفترة الممررة كما هي إلى buildBulkReportHTML
  */
 function openBulkStudentsReport(students, periodInfo = {}){
-  const reportWindow = window.open("", "_blank", "width=1100,height=780");
-  if (!reportWindow){
-    showToast("يرجى السماح بالنوافذ المنبثقة لعرض التقرير", "warning");
-    return;
-  }
-  reportWindow.document.open();
-  reportWindow.document.write(buildBulkReportHTML(students, periodInfo));
-  reportWindow.document.close();
+  printReportHTML(buildBulkReportHTML(students, periodInfo));
 }
