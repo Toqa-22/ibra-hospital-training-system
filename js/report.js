@@ -58,7 +58,7 @@ function buildReportHTML(group){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تقرير المتدرب — ${escapeHtml(group.student_name)}</title>
+<title>${escapeHtml(group.student_name)}</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   *{ box-sizing:border-box; }
@@ -210,8 +210,8 @@ function buildReportHTML(group){
 
 /**
  * طباعة صفحة HTML تقرير مباشرة، بلا فتح أي نافذة أو تبويب منبثق منفصل: تستبدل
- * محتوى التبويب الحالي مؤقتاً بمحتوى التقرير نفسه، تستدعي الطباعة عليه، ثم
- * تُعيد تحميل الصفحة الأصلية تلقائياً بعد إغلاق نافذة الطباعة.
+ * محتوى التبويب الحالي مؤقتاً بمحتوى التقرير نفسه، تستدعي الطباعة عليه فوراً،
+ * ثم تُعيد تحميل الصفحة الأصلية تلقائياً بعد إغلاق نافذة الطباعة.
  *
  * لماذا ليس إطاراً مخفياً (iframe) كما كانت سابقاً: أغلب متصفحات الجوال (Safari
  * على آيفون، ومتصفحات أندرويد المختلفة) تطبع فقط التبويب/النافذة العلوية دائماً
@@ -219,6 +219,15 @@ function buildReportHTML(group){
  * على الجوال طباعة صفحة لوحة التحكم نفسها خلف الإطار بدل التقرير. الحل الموثوق
  * على كل المنصات هو استبدال محتوى النافذة العلوية نفسها مؤقتاً بالتقرير، لأن
  * هذه هي النافذة الوحيدة التي تضمن كل المتصفحات طباعتها فعلياً.
+ *
+ * مهم جداً: window.print() يُستدعى هنا بشكل متزامن (Synchronous) فور
+ * document.write()، وليس داخل Promise أو setTimeout كما كانت محاولة سابقة —
+ * لأن أغلب متصفحات الجوال (خاصة Safari) تشترط أن يكون استدعاء print() جزءاً
+ * مباشراً من نفس سلسلة استدعاء لمسة/نقرة المستخدم (نفس الـ call stack الأصلي
+ * لحدث click)؛ أي تأخير ولو بسيط (عبر then()‎ أو setTimeout) يفصل الاستدعاء
+ * عن "بادرة المستخدم" فيتجاهله المتصفح بصمت أو يطبع محتوى قديماً/خاطئاً بدل
+ * التقرير — وهذا بالضبط ما كان يسبب ظهور التقرير على الشاشة بشكل صحيح لكن
+ * طباعة صفحة أخرى فعلياً على الجوال.
  *
  * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
  * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
@@ -233,22 +242,9 @@ function printReportHTML(html){
   document.write(html);
   document.close();
 
-  // ملاحظة مهمة: حدث "load" على window لا يتكرر أبداً بعد استبدال المستند
-  // عبر document.write() على النافذة الحالية (بخلاف تحميل src جديد في iframe) —
-  // لذلك لا يصح انتظاره هنا؛ ننتظر بدلاً منه اكتمال تحميل الخطوط عبر
-  // document.fonts.ready (مع حد زمني أقصى احتياطي) لضمان طباعة التقرير بتنسيقه
-  // الصحيح بدل إطلاق الطباعة فوراً قبل اكتمال الخط الخارجي من Google Fonts.
-  const triggerPrint = () => {
-    window.addEventListener("afterprint", restoreAndReload);
-    window.focus();
-    window.print();
-  };
-
-  const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
-  Promise.race([
-    fontsReady,
-    new Promise(resolve => setTimeout(resolve, 800)), // حد أقصى احتياطي إن تأخر تحميل الخط
-  ]).then(triggerPrint);
+  window.addEventListener("afterprint", restoreAndReload);
+  window.focus();
+  window.print();
 }
 
 /**
