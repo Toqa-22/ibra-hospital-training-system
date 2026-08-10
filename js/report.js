@@ -1,10 +1,9 @@
 // ============================================================================
 // report.js
 // بناء تقريرين قابلين للطباعة/الحفظ كـ PDF عبر خاصية الطباعة في المتصفح
-// (بدون أي مكتبة PDF خارجية)، وطباعتهما على نفس الصفحة الحالية دون أي فتح
-// نافذة/تبويب جديد أو استبدال للمستند — راجع تعليق printReportHTML() لتفاصيل
-// الآلية (حاوية مخفية + CSS خاص بالطباعة فقط، وهذا أثبت أنه الأسلوب الوحيد
-// الموثوق عبر متصفحات الجوال بعد تجربة عدة طرق أخرى):
+// (بدون أي مكتبة PDF خارجية)، وطباعتهما تلقائياً بفتح نافذة/تبويب جديد
+// وكتابة محتوى التقرير بداخله مباشرة (document.write)، ثم إغلاقه تلقائياً
+// بعد انتهاء الطباعة — راجع تعليق printReportHTML() لتفاصيل الآلية:
 //   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «🖨️ طباعة»
 //      لكل صف في جدول لوحة التحكم.
 //   2) تقرير عام لعدة متدربين معاً (buildBulkReportHTML/openBulkStudentsReport)
@@ -143,13 +142,7 @@ function buildReportHTML(group){
 
   .table-wrap{ overflow-x:auto; }
 
-  .print-bar{ text-align:center; margin-bottom:20px; }
-  .print-bar button{
-    background:#0A8F6A; color:#fff; border:none; padding:10px 22px;
-    border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
-    font-family:'Cairo', Tahoma, sans-serif;
-  }
-  @media print{ .print-bar{ display:none; } body{ padding:0 24px; } }
+  @media print{ body{ padding:0 24px; } }
 
   @media (max-width: 640px){
     body{ padding: 22px 16px; }
@@ -161,10 +154,6 @@ function buildReportHTML(group){
 </style>
 </head>
 <body>
-
-  <div class="print-bar">
-    <button onclick="window.print()">🖨️ طباعة</button>
-  </div>
 
   <div class="report-header">
     <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
@@ -220,84 +209,52 @@ function buildReportHTML(group){
 }
 
 /**
- * طباعة تقرير مباشرة على نفس الصفحة الحالية، دون فتح أي نافذة/تبويب جديد
- * ودون استبدال المستند بالكامل (document.write) أو إعادة تحميل الصفحة بعد
- * الطباعة: تُدرِج محتوى التقرير في حاوية مخفية داخل الصفحة الحالية نفسها،
- * وتُضيف قواعد CSS خاصة بالطباعة فقط (@media print) تُخفي كل عناصر الصفحة
- * الأخرى وتُظهر هذه الحاوية فقط أثناء الطباعة الفعلية — فتبقى الصفحة كما هي
- * تماماً بصرياً طوال الوقت (المستخدم لا يرى أي تغيير على الشاشة إطلاقاً)،
- * وما إن ينتهي أمر الطباعة (حفظ أو إلغاء) حتى تُزال الحاوية والقواعد المؤقتة
- * تلقائياً دون الحاجة لإعادة تحميل الصفحة من الأساس.
+ * فتح نافذة/تبويب جديد فارغ (about:blank) وكتابة محتوى التقرير بداخله مباشرة
+ * عبر document.write، ثم طباعته فوراً وبشكل متزامن — بلا حاجة لأي زر طباعة
+ * داخل صفحة التقرير نفسها إطلاقاً (تلقائي بالكامل). بمجرد إغلاق نافذة
+ * الطباعة (سواء بالحفظ أو الإلغاء)، تُغلق نافذة التقرير نفسها تلقائياً
+ * وتختفي، دون أي أثر يبقى على صفحة لوحة التحكم — لأن هذا الأسلوب لا يمسّ
+ * DOM الصفحة الأصلية إطلاقاً (بعكس أسلوب سابق كان يُدرِج محتوى التقرير
+ * مؤقتاً داخل نفس صفحة لوحة التحكم، وثبت أنه قد يُفسد حالتها).
  *
- * لماذا هذا الأسلوب تحديداً، بعد تجربة عدة طرق سابقة فشلت جميعها على الجوال:
- * — إطار مخفٍ (iframe): بعض متصفحات الجوال تطبع فقط النافذة العلوية دائماً،
- *   متجاهلةً تماماً استدعاء print() على أي إطار فرعي بداخلها.
- * — نافذة/تبويب منفصل (window.open): جُرِّب وعمل صحيحاً على الحاسوب، لكن
- *   اختبارات فعلية أظهرت أن بعض متصفحات الجوال قد "تعرض" ذلك التبويب بصرياً
- *   بشكل صحيح، لكن استدعاء print() عليه لا يستهدف محتواه فعلياً أثناء الطباعة
- *   الحقيقية — فتنتهي الطباعة بمحتوى الصفحة الأخرى (لوحة التحكم) بدل التقرير.
- * — استبدال المستند بالكامل (document.write) على نفس التبويب: حلّ مشكلة
- *   "أي نافذة تُطبع"، لكن ظل غير موثوق بالكامل على بعض المتصفحات، وأضاف
- *   ضرورة إعادة تحميل الصفحة بعد كل طباعة.
- *
- * أما هذا الأسلوب (حاوية مخفية + CSS خاص بالطباعة داخل نفس الصفحة الحية) فلا
- * يحتاج أي نافذة أخرى، ولا أي تنقّل (navigation)، ولا استبدال أي مستند — لذلك
- * لا يوجد أي التباس ممكن حول "أي صفحة يُطبعها المتصفح": هي نفسها الصفحة
- * المرئية أمام المستخدم دائماً، وهذا مضمون فعلياً على كل المتصفحات والأجهزة.
- *
- * ملاحظة تقنية: تُفصل قواعد @page (حجم/هامش الصفحة عند الطباعة) عن بقية
- * القواعد قبل التغليف، لأن @page لا يصح تضمينها داخل @media بحسب مواصفات CSS
- * (ستُتجاهل من المتصفح لو غُلِّفت). بقية القواعد (كل تنسيقات التقرير: الخط،
- * الجدول، الألوان...) تُغلَّف كاملة داخل @media print{...} حتى لا تؤثر إطلاقاً
- * على شكل الصفحة أثناء العرض العادي (خارج لحظة الطباعة الفعلية فقط).
+ * ملاحظة مهمة جداً: الطباعة تُستدعى هنا مباشرة بعد document.write/close، وليس
+ * بانتظار حدث "load" على النافذة الجديدة كما كانت محاولة سابقة — لأن حدث
+ * "load" لا يُطلَق إطلاقاً بعد document.write حتى على نافذة فارغة جديدة تماماً
+ * (تأكد هذا فعلياً بالاختبار: النافذة تصل لحالة readyState="complete" فوراً،
+ * لكن حدث load نفسه لا يحدث أبداً في هذه الحالة تحديداً). الانتظار له كان
+ * يمنع الطباعة من الانطلاق إطلاقاً، وهذا بالضبط ما كان يسبب توقف الطباعة عن
+ * العمل بعد إضافته.
  *
  * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
  * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
  */
 function printReportHTML(html){
-  const parser = new DOMParser();
-  const reportDoc = parser.parseFromString(html, "text/html");
-  const bodyInnerHTML = reportDoc.body.innerHTML;
-  const rawCss = Array.from(reportDoc.querySelectorAll("style")).map(s => s.textContent).join("\n");
-
-  // فصل قواعد @page (يجب أن تبقى أعلى مستوى الملف، لا يصح تضمينها داخل @media)
-  const pageRuleRegex = /@page[^{]*\{[^{}]*\}/g;
-  const pageRules = (rawCss.match(pageRuleRegex) || []).join("\n");
-  const otherCss = rawCss.replace(pageRuleRegex, "");
-
-  // إزالة أي بقايا من طباعة سابقة لم تُنظَّف (احتياط فقط، نادراً ما يحدث)
-  const prevContainer = document.getElementById("__printReportContainer");
-  if (prevContainer) prevContainer.remove();
-  const prevStyle = document.getElementById("__printReportStyle");
-  if (prevStyle) prevStyle.remove();
-
-  const styleEl = document.createElement("style");
-  styleEl.id = "__printReportStyle";
-  styleEl.textContent = `
-    #__printReportContainer{ display:none; }
-    @media print{
-      body > *:not(#__printReportContainer){ display:none !important; }
-      #__printReportContainer{ display:block !important; }
+  const reportWindow = window.open("", "_blank");
+  if (!reportWindow){
+    if (typeof showToast === "function"){
+      showToast("يرجى السماح بالنوافذ المنبثقة لطباعة التقرير", "warning");
     }
-    ${pageRules}
-    @media print{ ${otherCss} }
-  `;
-  document.head.appendChild(styleEl);
+    return;
+  }
 
-  const container = document.createElement("div");
-  container.id = "__printReportContainer";
-  container.innerHTML = bodyInnerHTML;
-  document.body.appendChild(container);
+  reportWindow.document.open();
+  reportWindow.document.write(html);
+  reportWindow.document.close();
 
-  const cleanup = () => {
-    window.removeEventListener("afterprint", cleanup);
-    if (container.parentNode) container.remove();
-    if (styleEl.parentNode) styleEl.remove();
+  let closed = false;
+  const closeReportWindow = () => {
+    if (closed) return;
+    closed = true;
+    clearTimeout(safetyTimer);
+    try { reportWindow.close(); } catch (err){ /* تجاهل */ }
   };
-  window.addEventListener("afterprint", cleanup);
+  // مهلة احتياطية قصوى: تضمن عدم بقاء نافذة التقرير مفتوحة إلى الأبد حتى لو
+  // فشل حدث afterprint في الانطلاق لأي سبب على بعض المتصفحات
+  const safetyTimer = setTimeout(closeReportWindow, 120000); // دقيقتان
 
-  window.focus();
-  window.print();
+  reportWindow.addEventListener("afterprint", closeReportWindow);
+  reportWindow.focus();
+  reportWindow.print();
 }
 
 /**
@@ -442,15 +399,8 @@ function buildBulkReportHTML(students, periodInfo = {}){
     border-top:1px dashed #E3E8EE; padding-top:14px;
   }
 
-  /* عند الطباعة الفعلية: نخفي زر الطباعة نفسه، ونزيل الحشو الإضافي لأن @page يضبط الهامش الفعلي */
-  .print-bar{ text-align:center; margin-bottom:20px; }
-  .print-bar button{
-    background:#0A8F6A; color:#fff; border:none; padding:10px 22px;
-    border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
-    font-family:'Cairo', Tahoma, sans-serif;
-  }
+  /* عند الطباعة الفعلية: نزيل الحشو الإضافي لأن @page يضبط الهامش الفعلي */
   @media print{
-    .print-bar{ display:none; }
     body{ padding:0; max-width:none; }
   }
 
@@ -463,10 +413,6 @@ function buildBulkReportHTML(students, periodInfo = {}){
 </style>
 </head>
 <body>
-
-  <div class="print-bar">
-    <button onclick="window.print()">🖨️ طباعة</button>
-  </div>
 
   <div class="report-header">
     <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
