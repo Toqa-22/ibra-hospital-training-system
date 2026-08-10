@@ -216,7 +216,11 @@ function buildReportHTML(group){
 }
 
 /**
- * فتح نافذة متصفح منبثقة جديدة وعرض تقرير الطالب (من buildReportHTML) بداخلها.
+ * فتح نافذة متصفح منبثقة جديدة وعرض تقرير الطالب (من buildReportHTML) بداخلها،
+ * وتشغيل نافذة الطباعة تلقائياً فور اكتمال تحميلها — فتظهر معاينة الطباعة
+ * مباشرة بنقرة واحدة على «🖨️ طباعة» من الجدول، دون الحاجة لفتح تبويب التقرير
+ * أولاً ثم الضغط على زر الطباعة بداخله يدوياً. زر «🖨️ طباعة» داخل التقرير
+ * نفسه يبقى موجوداً لإعادة الطباعة يدوياً إن أغلق المستخدم نافذة الطباعة.
  * تُستخدم رابط Blob حقيقي (وليس نافذة فارغة يُكتب بداخلها بـ document.write)
  * حتى لا يظهر عنوان النافذة/التبويب كـ "about:blank" عند الطباعة أو الحفظ
  * كـ PDF — فيظهر بدلاً منه عنوان التقرير الفعلي (وسم <title> بداخل الصفحة).
@@ -231,8 +235,10 @@ function openStudentReport(group){
     URL.revokeObjectURL(blobUrl);
     return;
   }
-  // تحرير رابط الـ Blob من الذاكرة بعد اكتمال تحميل النافذة الجديدة به
-  reportWindow.addEventListener("load", () => URL.revokeObjectURL(blobUrl));
+  reportWindow.addEventListener("load", () => {
+    URL.revokeObjectURL(blobUrl);
+    reportWindow.print();
+  });
 }
 
 // ============================================================================
@@ -450,10 +456,10 @@ function buildBulkReportHTML(students, periodInfo = {}){
 }
 
 /**
- * فتح نافذة متصفح منبثقة جديدة وعرض التقرير العام (من buildBulkReportHTML) بداخلها.
- * تُستخدم رابط Blob حقيقي (وليس نافذة فارغة يُكتب بداخلها بـ document.write)
- * حتى لا يظهر عنوان النافذة/التبويب كـ "about:blank" عند الطباعة أو الحفظ
- * كـ PDF — فيظهر بدلاً منه عنوان التقرير الفعلي (وسم <title> بداخل الصفحة).
+ * فتح نافذة متصفح منبثقة جديدة وعرض التقرير العام (من buildBulkReportHTML) بداخلها،
+ * وتشغيل نافذة الطباعة تلقائياً فور اكتمال تحميلها — بنفس منطق openStudentReport
+ * تماماً (راجع تعليقها أعلاه لتفاصيل السبب). زر «🖨️ طباعة» داخل التقرير نفسه
+ * يبقى موجوداً لإعادة الطباعة يدوياً إن أغلق المستخدم نافذة الطباعة.
  * إن كانت النوافذ المنبثقة محظورة، تُعرض رسالة تنبيه بدل الفشل الصامت.
  * @param {Array} students - السجلات الممررة كما هي إلى buildBulkReportHTML
  * @param {object} periodInfo - حدود الفترة الممررة كما هي إلى buildBulkReportHTML
@@ -466,6 +472,8 @@ function openBulkStudentsReport(students, periodInfo = {}){
     URL.revokeObjectURL(blobUrl);
     return;
   }
-  // تحرير رابط الـ Blob من الذاكرة بعد اكتمال تحميل النافذة الجديدة به
-  reportWindow.addEventListener("load", () => URL.revokeObjectURL(blobUrl));
+  reportWindow.addEventListener("load", () => {
+    URL.revokeObjectURL(blobUrl);
+    reportWindow.print();
+  });
 }
