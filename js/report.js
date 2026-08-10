@@ -1,9 +1,10 @@
 // ============================================================================
 // report.js
 // بناء تقريرين قابلين للطباعة/الحفظ كـ PDF عبر خاصية الطباعة في المتصفح
-// (بدون أي مكتبة PDF خارجية)، وطباعتهما مباشرة داخل نفس التبويب الحالي (بدون
-// فتح أي نافذة أو تبويب منفصل، بعد أن أثبتت الاختبارات أن هذا هو الأسلوب
-// الوحيد الموثوق عبر متصفحات الجوال — راجع تعليق printReportHTML() للتفاصيل):
+// (بدون أي مكتبة PDF خارجية)، وطباعتهما على نفس الصفحة الحالية دون أي فتح
+// نافذة/تبويب جديد أو استبدال للمستند — راجع تعليق printReportHTML() لتفاصيل
+// الآلية (حاوية مخفية + CSS خاص بالطباعة فقط، وهذا أثبت أنه الأسلوب الوحيد
+// الموثوق عبر متصفحات الجوال بعد تجربة عدة طرق أخرى):
 //   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «🖨️ طباعة»
 //      لكل صف في جدول لوحة التحكم.
 //   2) تقرير عام لعدة متدربين معاً (buildBulkReportHTML/openBulkStudentsReport)
@@ -219,34 +220,82 @@ function buildReportHTML(group){
 }
 
 /**
- * طباعة تقرير مباشرة داخل نفس التبويب الحالي: تستبدل محتوى الصفحة مؤقتاً
- * بمحتوى التقرير، تستدعي الطباعة عليه فوراً (بشكل متزامن مع نقرة المستخدم)،
- * ثم تُعيد تحميل الصفحة الأصلية تلقائياً بعد إغلاق نافذة الطباعة (سواء ضغط
- * المستخدم "حفظ" أو "إلغاء").
+ * طباعة تقرير مباشرة على نفس الصفحة الحالية، دون فتح أي نافذة/تبويب جديد
+ * ودون استبدال المستند بالكامل (document.write) أو إعادة تحميل الصفحة بعد
+ * الطباعة: تُدرِج محتوى التقرير في حاوية مخفية داخل الصفحة الحالية نفسها،
+ * وتُضيف قواعد CSS خاصة بالطباعة فقط (@media print) تُخفي كل عناصر الصفحة
+ * الأخرى وتُظهر هذه الحاوية فقط أثناء الطباعة الفعلية — فتبقى الصفحة كما هي
+ * تماماً بصرياً طوال الوقت (المستخدم لا يرى أي تغيير على الشاشة إطلاقاً)،
+ * وما إن ينتهي أمر الطباعة (حفظ أو إلغاء) حتى تُزال الحاوية والقواعد المؤقتة
+ * تلقائياً دون الحاجة لإعادة تحميل الصفحة من الأساس.
  *
- * لماذا هذا الأسلوب تحديداً، وليس فتح تبويب/نافذة منفصلة لعرض التقرير: جُرِّب
- * فتح التبويب المنفصل (عبر window.open برابط Blob) وتأكد أنه يعمل بشكل سليم
- * على الحاسوب المكتبي، لكن اختبارات متكررة أظهرت أن بعض متصفحات الجوال قد
- * "تعرض" محتوى ذلك التبويب بصرياً بشكل صحيح، لكن استدعاء print() عليه لا
- * يستهدف فعلياً محتواه أثناء الطباعة الفعلية — فتنتهي الطباعة بمحتوى التبويب
- * الأصلي (لوحة التحكم) بدل التقرير، رغم أن كل شيء بدا يعمل صحيحاً على الشاشة.
- * هذا سلوك موثّق لبعض متصفحات الجوال حين يُستدعى print() على نافذة غير
- * النافذة الحالية المُركَّز عليها فعلياً من نظام التشغيل. الحل الموثوق الوحيد
- * عبر كل الأجهزة (تأكد باختبار آلي فعلي) هو طباعة النافذة الحالية نفسها التي
- * يستدعي منها المستخدم الطباعة مباشرة، لا نافذة أخرى.
+ * لماذا هذا الأسلوب تحديداً، بعد تجربة عدة طرق سابقة فشلت جميعها على الجوال:
+ * — إطار مخفٍ (iframe): بعض متصفحات الجوال تطبع فقط النافذة العلوية دائماً،
+ *   متجاهلةً تماماً استدعاء print() على أي إطار فرعي بداخلها.
+ * — نافذة/تبويب منفصل (window.open): جُرِّب وعمل صحيحاً على الحاسوب، لكن
+ *   اختبارات فعلية أظهرت أن بعض متصفحات الجوال قد "تعرض" ذلك التبويب بصرياً
+ *   بشكل صحيح، لكن استدعاء print() عليه لا يستهدف محتواه فعلياً أثناء الطباعة
+ *   الحقيقية — فتنتهي الطباعة بمحتوى الصفحة الأخرى (لوحة التحكم) بدل التقرير.
+ * — استبدال المستند بالكامل (document.write) على نفس التبويب: حلّ مشكلة
+ *   "أي نافذة تُطبع"، لكن ظل غير موثوق بالكامل على بعض المتصفحات، وأضاف
+ *   ضرورة إعادة تحميل الصفحة بعد كل طباعة.
+ *
+ * أما هذا الأسلوب (حاوية مخفية + CSS خاص بالطباعة داخل نفس الصفحة الحية) فلا
+ * يحتاج أي نافذة أخرى، ولا أي تنقّل (navigation)، ولا استبدال أي مستند — لذلك
+ * لا يوجد أي التباس ممكن حول "أي صفحة يُطبعها المتصفح": هي نفسها الصفحة
+ * المرئية أمام المستخدم دائماً، وهذا مضمون فعلياً على كل المتصفحات والأجهزة.
+ *
+ * ملاحظة تقنية: تُفصل قواعد @page (حجم/هامش الصفحة عند الطباعة) عن بقية
+ * القواعد قبل التغليف، لأن @page لا يصح تضمينها داخل @media بحسب مواصفات CSS
+ * (ستُتجاهل من المتصفح لو غُلِّفت). بقية القواعد (كل تنسيقات التقرير: الخط،
+ * الجدول، الألوان...) تُغلَّف كاملة داخل @media print{...} حتى لا تؤثر إطلاقاً
+ * على شكل الصفحة أثناء العرض العادي (خارج لحظة الطباعة الفعلية فقط).
  *
  * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
  * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
  */
 function printReportHTML(html){
-  document.open();
-  document.write(html);
-  document.close();
+  const parser = new DOMParser();
+  const reportDoc = parser.parseFromString(html, "text/html");
+  const bodyInnerHTML = reportDoc.body.innerHTML;
+  const rawCss = Array.from(reportDoc.querySelectorAll("style")).map(s => s.textContent).join("\n");
 
-  window.addEventListener("afterprint", function restore(){
-    window.removeEventListener("afterprint", restore);
-    location.reload();
-  });
+  // فصل قواعد @page (يجب أن تبقى أعلى مستوى الملف، لا يصح تضمينها داخل @media)
+  const pageRuleRegex = /@page[^{]*\{[^{}]*\}/g;
+  const pageRules = (rawCss.match(pageRuleRegex) || []).join("\n");
+  const otherCss = rawCss.replace(pageRuleRegex, "");
+
+  // إزالة أي بقايا من طباعة سابقة لم تُنظَّف (احتياط فقط، نادراً ما يحدث)
+  const prevContainer = document.getElementById("__printReportContainer");
+  if (prevContainer) prevContainer.remove();
+  const prevStyle = document.getElementById("__printReportStyle");
+  if (prevStyle) prevStyle.remove();
+
+  const styleEl = document.createElement("style");
+  styleEl.id = "__printReportStyle";
+  styleEl.textContent = `
+    #__printReportContainer{ display:none; }
+    @media print{
+      body > *:not(#__printReportContainer){ display:none !important; }
+      #__printReportContainer{ display:block !important; }
+    }
+    ${pageRules}
+    @media print{ ${otherCss} }
+  `;
+  document.head.appendChild(styleEl);
+
+  const container = document.createElement("div");
+  container.id = "__printReportContainer";
+  container.innerHTML = bodyInnerHTML;
+  document.body.appendChild(container);
+
+  const cleanup = () => {
+    window.removeEventListener("afterprint", cleanup);
+    if (container.parentNode) container.remove();
+    if (styleEl.parentNode) styleEl.remove();
+  };
+  window.addEventListener("afterprint", cleanup);
+
   window.focus();
   window.print();
 }
