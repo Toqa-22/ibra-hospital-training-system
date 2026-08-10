@@ -408,7 +408,7 @@ function renderTable(){
     const groupId = `grp-${gIdx}`;
     const actionsCell = `
       <div class="actions-cell">
-        <button class="btn-report" data-report-idx="${gIdx}">⬇ تقرير</button>
+        <button class="btn-report" data-report-idx="${gIdx}">🖨️ طباعة</button>
         <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
       </div>`;
 
@@ -417,7 +417,7 @@ function renderTable(){
       const status = getTrainingStatus(r.training_start, r.training_end);
       const singleActionsCell = `
         <div class="actions-cell">
-          <button class="btn-report" data-report-idx="${gIdx}">⬇ تقرير</button>
+          <button class="btn-report" data-report-idx="${gIdx}">🖨️ طباعة</button>
           <button class="btn-edit" data-edit-group="${gIdx}" data-edit-record="0">✏️ تعديل</button>
           <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
         </div>`;
