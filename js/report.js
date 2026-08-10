@@ -159,7 +159,7 @@ function buildReportHTML(group){
 <body>
 
   <div class="print-bar">
-    <button onclick="window.print()">🖨️ طباعة / حفظ كـ PDF</button>
+    <button onclick="window.print()">🖨️ طباعة</button>
   </div>
 
   <div class="report-header">
@@ -216,19 +216,23 @@ function buildReportHTML(group){
 }
 
 /**
- * فتح نافذة متصفح منبثقة جديدة وكتابة تقرير الطالب (من buildReportHTML) بداخلها.
+ * فتح نافذة متصفح منبثقة جديدة وعرض تقرير الطالب (من buildReportHTML) بداخلها.
+ * تُستخدم رابط Blob حقيقي (وليس نافذة فارغة يُكتب بداخلها بـ document.write)
+ * حتى لا يظهر عنوان النافذة/التبويب كـ "about:blank" عند الطباعة أو الحفظ
+ * كـ PDF — فيظهر بدلاً منه عنوان التقرير الفعلي (وسم <title> بداخل الصفحة).
  * إن كانت النوافذ المنبثقة محظورة في المتصفح، تُعرض رسالة تنبيه بدل الفشل الصامت.
  * @param {object} group - بيانات الطالب الممررة كما هي إلى buildReportHTML
  */
 function openStudentReport(group){
-  const reportWindow = window.open("", "_blank", "width=900,height=760");
+  const blobUrl = URL.createObjectURL(new Blob([buildReportHTML(group)], { type: "text/html" }));
+  const reportWindow = window.open(blobUrl, "_blank", "width=900,height=760");
   if (!reportWindow){
     showToast("يرجى السماح بالنوافذ المنبثقة لعرض التقرير", "warning");
+    URL.revokeObjectURL(blobUrl);
     return;
   }
-  reportWindow.document.open();
-  reportWindow.document.write(buildReportHTML(group));
-  reportWindow.document.close();
+  // تحرير رابط الـ Blob من الذاكرة بعد اكتمال تحميل النافذة الجديدة به
+  reportWindow.addEventListener("load", () => URL.revokeObjectURL(blobUrl));
 }
 
 // ============================================================================
@@ -387,7 +391,7 @@ function buildBulkReportHTML(students, periodInfo = {}){
 <body>
 
   <div class="print-bar">
-    <button onclick="window.print()">🖨️ طباعة / حفظ كـ PDF</button>
+    <button onclick="window.print()">🖨️ طباعة</button>
   </div>
 
   <div class="report-header">
@@ -446,18 +450,22 @@ function buildBulkReportHTML(students, periodInfo = {}){
 }
 
 /**
- * فتح نافذة متصفح منبثقة جديدة وكتابة التقرير العام (من buildBulkReportHTML) بداخلها.
+ * فتح نافذة متصفح منبثقة جديدة وعرض التقرير العام (من buildBulkReportHTML) بداخلها.
+ * تُستخدم رابط Blob حقيقي (وليس نافذة فارغة يُكتب بداخلها بـ document.write)
+ * حتى لا يظهر عنوان النافذة/التبويب كـ "about:blank" عند الطباعة أو الحفظ
+ * كـ PDF — فيظهر بدلاً منه عنوان التقرير الفعلي (وسم <title> بداخل الصفحة).
  * إن كانت النوافذ المنبثقة محظورة، تُعرض رسالة تنبيه بدل الفشل الصامت.
  * @param {Array} students - السجلات الممررة كما هي إلى buildBulkReportHTML
  * @param {object} periodInfo - حدود الفترة الممررة كما هي إلى buildBulkReportHTML
  */
 function openBulkStudentsReport(students, periodInfo = {}){
-  const reportWindow = window.open("", "_blank", "width=1100,height=780");
+  const blobUrl = URL.createObjectURL(new Blob([buildBulkReportHTML(students, periodInfo)], { type: "text/html" }));
+  const reportWindow = window.open(blobUrl, "_blank", "width=1100,height=780");
   if (!reportWindow){
     showToast("يرجى السماح بالنوافذ المنبثقة لعرض التقرير", "warning");
+    URL.revokeObjectURL(blobUrl);
     return;
   }
-  reportWindow.document.open();
-  reportWindow.document.write(buildBulkReportHTML(students, periodInfo));
-  reportWindow.document.close();
+  // تحرير رابط الـ Blob من الذاكرة بعد اكتمال تحميل النافذة الجديدة به
+  reportWindow.addEventListener("load", () => URL.revokeObjectURL(blobUrl));
 }
