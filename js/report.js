@@ -208,7 +208,7 @@ function buildReportHTML(group){
 
   <div class="report-footer">
     <img class="stamp-img" src="${stampUrl}" alt="ختم المستشفى" onerror="this.remove()">
-    <span>هذا التقرير صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}</span>
+    <span>هذا الطلب صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}</span>
   </div>
 
 </body>
@@ -438,7 +438,7 @@ function buildBulkReportHTML(students, periodInfo = {}){
   </table>
 
   <div class="report-footer">
-    هذا التقرير صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}
+    هذا الطلب صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}
   </div>
 
 </body>
