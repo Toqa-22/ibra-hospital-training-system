@@ -1,566 +1,653 @@
 // ============================================================================
-// report.js
-// بناء تقريرين قابلين للطباعة/الحفظ كـ PDF عبر خاصية الطباعة في المتصفح
-// (بدون أي مكتبة PDF خارجية)، وطباعتهما على نفس الصفحة الحالية دون أي فتح
-// نافذة/تبويب جديد أو استبدال للمستند — راجع تعليق printReportHTML() لتفاصيل
-// الآلية (حاوية مخفية + CSS خاص بالطباعة فقط، وهذا أثبت أنه الأسلوب الوحيد
-// الموثوق عبر متصفحات الجوال بعد تجربة عدة طرق أخرى):
-//   1) تقرير متدرب واحد (buildReportHTML/openStudentReport) — من زر «🖨️ طباعة»
-//      لكل صف في جدول لوحة التحكم.
-//   2) تقرير عام لعدة متدربين معاً (buildBulkReportHTML/openBulkStudentsReport)
-//      — من لوحة «🖨️ طباعة تقرير لفترة محددة» المستقلة عن فلاتر البحث،
-//      بتنسيق A4 أفقي (Landscape) مع تكرار رأس الجدول تلقائياً على كل صفحة.
+// dashboard.js
+// منطق لوحة إدارة المتدربين (dashboard.html) بالكامل: بطاقات الأقسام، شريط
+// تصفية الفئات، لوحة الفلاتر التسعة، الجدول القابل للفرز/التوسيع/الترقيم،
+// أزرار التعديل والحذف والتقرير لكل سجل، ولوحة طباعة تقرير الفترة المستقلة.
 //
-// يعتمد على دوال من js/ui.js (escapeHtml, formatDateShort, calcDurationDays,
-// formatDurationLabel, getTrainingStatus) وعلى js/departments.js
-// (findCategoryForDepartment) — يجب تحميلهما قبل هذا الملف.
+// الاعتماديات المطلوب تحميلها قبل هذا الملف (بنفس الترتيب في dashboard.html):
+//   1) js/config.js       — بيانات الاتصال بـ Supabase
+//   2) js/departments.js  — يوفر CATEGORIES و groupStudentsByDepartment()
+//   3) js/ui.js           — يوفر showToast, showConfirm, showEditStudentModal,
+//                            calcDurationDays, formatDurationLabel, getTrainingStatus...
+//   4) js/supabase.js     — يوفر fetchAllStudents, updateStudentRecord, deleteStudentsByIds
+//   5) js/report.js       — يوفر openStudentReport() و openBulkStudentsReport()
+//
+// كل البيانات تُجلب مرة واحدة فقط عند تحميل الصفحة (loadStudents) وتُخزَّن في
+// state.allStudents؛ أي فلترة أو فرز أو تعديل أو حذف لاحق يعمل محلياً على هذه
+// النسخة المخزَّنة في المتصفح دون طلب بيانات جديدة من الخادم في كل مرة.
 // ============================================================================
 
-const MINISTRY_NAME = "وزارة الصحة";
-const HOSPITAL_NAME = "مستشفى إبراء";
-const HOSPITAL_SUBTITLE = "قسم التطوير والتوجيه المهني";
+const PAGE_SIZE = 10;
+
+const state = {
+  allStudents: [],
+  activeDepartment: "",   // فلتر بطاقة القسم النشطة
+  activeCategory: "",     // فلتر شريحة الفئة النشطة (id من CATEGORIES)
+  sortField: "created_at",
+  sortDir: "desc",
+  page: 1,
+};
+
+document.addEventListener("DOMContentLoaded", async () => {
+  renderCategoryChips();
+  populateCategoryFilterOptions();
+  bindStaticEvents();
+  await loadStudents();
+});
+
+// ---------------------------------------------------------------------------
+// تحميل البيانات من Supabase
+// ---------------------------------------------------------------------------
+/**
+ * جلب كل سجلات المتدربين من Supabase عبر fetchAllStudents() وتخزينها في state.allStudents،
+ * ثم إعادة رسم بطاقات الأقسام، تعبئة قائمة فلتر الأقسام، ورسم الجدول.
+ * تُستدعى مرة واحدة عند تحميل الصفحة؛ أي تعديل/حذف/إضافة لاحق يُحدّث state.allStudents
+ * محلياً مباشرة بدل إعادة الجلب الكامل من الخادم في كل مرة.
+ */
+async function loadStudents(){
+  try {
+    state.allStudents = await fetchAllStudents();
+  } catch (err){
+    console.error(err);
+    showToast("تعذر تحميل بيانات المتدربين", "error");
+    state.allStudents = [];
+  }
+  renderDepartmentCards();
+  populateDepartmentFilterOptions();
+  renderTable();
+}
+
+// ---------------------------------------------------------------------------
+// شرائح تصفية الفئة الرئيسية (تُطبَّق على بطاقات الأقسام والجدول معاً)
+// ---------------------------------------------------------------------------
+/**
+ * رسم شريط شرائح تصفية الفئة الرئيسية أعلى بطاقات الأقسام (الكل + الفئات الأربع).
+ * الضغط على شريحة يُحدّث state.activeCategory ويُزامن قائمة فلتر الفئة المنسدلة معه،
+ * ثم يعيد رسم بطاقات الأقسام وقائمة فلتر الأقسام (لأنها تعتمد على الفئة النشطة).
+ */
+function renderCategoryChips(){
+  const row = document.getElementById("categoryChipRow");
+  const chips = [`<div class="category-chip ${state.activeCategory === "" ? "active" : ""}" data-cat="">الكل</div>`]
+    .concat(CATEGORIES.map(cat => `
+      <div class="category-chip ${state.activeCategory === cat.id ? "active" : ""}" data-cat="${cat.id}">
+        <span class="chip-icon">${cat.icon}</span>${escapeHtml(cat.name)}
+      </div>`));
+  row.innerHTML = chips.join("");
+
+  row.querySelectorAll(".category-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      state.activeCategory = chip.dataset.cat;
+      document.getElementById("f_category").value = state.activeCategory;
+      // إعادة ضبط فلتر القسم إن كان لا ينتمي للفئة الجديدة
+      const deptSelect = document.getElementById("f_department");
+      if (state.activeCategory && deptSelect.value){
+        const cat = CATEGORIES.find(c => c.id === state.activeCategory);
+        if (!cat.departments.includes(deptSelect.value)){
+          deptSelect.value = "";
+          state.activeDepartment = "";
+        }
+      }
+      state.page = 1;
+      renderCategoryChips();
+      renderDepartmentCards();
+      populateDepartmentFilterOptions();
+      renderTable();
+    });
+  });
+}
 
 /**
- * بناء صفحة HTML مستقلة وكاملة (تحتوي كل الأنماط داخلها) لتقرير متدرب واحد:
- * شعار الوزارة/المستشفى وسماً توسيطاً في الأعلى، صندوق بيانات الطالب (الاسم،
- * الهاتف، التخصص، الكلية)، جدول بكل الأقسام التي سُجّل فيها مع فئة كل قسم
- * وفترته ومدته، وختم شفاف فوق سطر التذييل في أسفل الصفحة. لا تُستخدم مباشرة —
- * يستدعيها openStudentReport() فقط لكتابة الناتج داخل نافذة منبثقة جديدة.
- * @param {{student_name:string, phone:string, records:Array}} group - بيانات الطالب وكل سجلاته
- * @returns {string} نص HTML كامل جاهز لكتابته في مستند نافذة جديدة
+ * تعبئة القائمة المنسدلة «الفئة الرئيسية» في لوحة الفلاتر بكل الفئات الأربع الثابتة
+ * (بخلاف قائمة الأقسام، الفئات لا تتغيّر حسب البيانات فهي دائماً نفس الأربع).
  */
-function buildReportHTML(group){
-  const sortedRecords = group.records
-    .slice()
-    .sort((a, b) => new Date(b.training_start) - new Date(a.training_start));
+function populateCategoryFilterOptions(){
+  const select = document.getElementById("f_category");
+  select.innerHTML = `<option value="">جميع الفئات</option>` +
+    CATEGORIES.map(c => `<option value="${c.id}">${c.icon} ${escapeHtml(c.name)}</option>`).join("");
+}
 
-  const rows = sortedRecords
-    .map(r => {
-      const cat = findCategoryForDepartment(r.department);
-      return `
+// ---------------------------------------------------------------------------
+// بطاقات الأقسام
+// ---------------------------------------------------------------------------
+/**
+ * رسم بطاقات الأقسام في أعلى لوحة التحكم. **مهم:** العدد المعروض في كل بطاقة
+ * هو عدد الطلاب «قيد التدريب حالياً» فقط (تاريخ اليوم بين بداية ونهاية تدريبهم)،
+ * وليس إجمالي كل من سجّل في هذا القسم عبر كل الوقت. إن كانت هناك فئة نشطة،
+ * تُعرض فقط بطاقات الأقسام التابعة لتلك الفئة.
+ */
+function renderDepartmentCards(){
+  const grid = document.getElementById("deptGrid");
+  const activeStudents = state.allStudents.filter(s => getTrainingStatus(s.training_start, s.training_end).key === "active");
+  let groups = groupStudentsByDepartment(activeStudents);
+
+  if (state.activeCategory){
+    const cat = CATEGORIES.find(c => c.id === state.activeCategory);
+    groups = groups.filter(g => cat.departments.includes(g.department));
+  }
+
+  if (groups.length === 0){
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="e-icon">📋</div>
+        <p>لا توجد بيانات متدربين مسجلة حالياً.</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = groups.map((g) => `
+    <div class="dept-card ${g.department === state.activeDepartment ? "active" : ""}" data-dept="${escapeHtml(g.department)}">
+      <div class="dept-icon">${getDepartmentIcon(g.department)}</div>
+      <div class="dept-name">${escapeHtml(g.department)}</div>
+      <div class="dept-count-row">
+        <span class="dept-badge">${formatTraineeCount(g.count)}</span>
+      </div>
+    </div>
+  `).join("");
+
+  grid.querySelectorAll(".dept-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const dept = card.dataset.dept;
+      state.activeDepartment = state.activeDepartment === dept ? "" : dept;
+      document.getElementById("f_department").value = state.activeDepartment;
+      state.page = 1;
+      renderDepartmentCards();
+      renderTable();
+    });
+  });
+}
+
+/**
+ * تعبئة القائمة المنسدلة «القسم» في لوحة الفلاتر بالأقسام التي لديها سجلات فعلية
+ * فقط (بخلاف بطاقات الأقسام، هذه القائمة تُبنى من كل السجلات وليس النشطة فقط،
+ * ليتمكن المستخدم من البحث حتى عن أقسام ليس فيها متدرب حالياً). إن كانت هناك
+ * فئة نشطة، تُقتصر الخيارات على أقسام تلك الفئة فقط.
+ */
+function populateDepartmentFilterOptions(){
+  const select = document.getElementById("f_department");
+  const current = select.value;
+  let groups = groupStudentsByDepartment(state.allStudents);
+
+  if (state.activeCategory){
+    const cat = CATEGORIES.find(c => c.id === state.activeCategory);
+    groups = groups.filter(g => cat.departments.includes(g.department));
+  }
+
+  select.innerHTML = `<option value="">جميع الأقسام</option>` +
+    groups.map(g => `<option value="${escapeHtml(g.department)}">${escapeHtml(g.department)}</option>`).join("");
+  select.value = groups.some(g => g.department === current) ? current : (state.activeDepartment || "");
+}
+
+// ---------------------------------------------------------------------------
+// الأحداث الثابتة (الفلاتر، الفرز، التصدير)
+// ---------------------------------------------------------------------------
+/**
+ * ربط كل مستمعي الأحداث الثابتة في الصفحة (لا تتغيّر مع كل رسم): حقول البحث
+ * التسعة (بحث فوري مع تأخير debounce)، زر إعادة تعيين الفلاتر، الفرز بالضغط على
+ * رؤوس الأعمدة، وزر «طباعة التقرير» في لوحة الفترة المستقلة. تُستدعى مرة
+ * واحدة فقط عند تحميل الصفحة؛ أزرار كل صف في الجدول (تعديل/حذف/تقرير) تُربط
+ * بشكل منفصل داخل renderTable() لأنها تُعاد كتابتها مع كل إعادة رسم.
+ */
+function bindStaticEvents(){
+  const filterIds = ["f_name", "f_phone", "f_spec", "f_category", "f_department", "f_start", "f_end", "f_regdate", "f_status"];
+  filterIds.forEach(id => {
+    const el = document.getElementById(id);
+    const handler = debounce(() => {
+      if (id === "f_category"){
+        state.activeCategory = el.value;
+        renderCategoryChips();
+        renderDepartmentCards();
+        populateDepartmentFilterOptions();
+      }
+      if (id === "f_department"){
+        state.activeDepartment = el.value;
+        renderDepartmentCards();
+      }
+      state.page = 1;
+      renderTable();
+    }, 200);
+    el.addEventListener("input", handler);
+    el.addEventListener("change", handler);
+  });
+
+  document.getElementById("resetFiltersBtn").addEventListener("click", () => {
+    filterIds.forEach(id => { document.getElementById(id).value = ""; });
+    state.activeDepartment = "";
+    state.activeCategory = "";
+    state.page = 1;
+    renderCategoryChips();
+    renderDepartmentCards();
+    populateDepartmentFilterOptions();
+    renderTable();
+  });
+
+  document.querySelectorAll("#studentsTable thead th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const field = th.dataset.sort;
+      if (state.sortField === field){
+        state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.sortField = field;
+        state.sortDir = "asc";
+      }
+      renderTable();
+    });
+  });
+
+  document.getElementById("printLimitBtn").addEventListener("click", () => {
+    const from = document.getElementById("limitFrom").value;
+    const to = document.getElementById("limitTo").value;
+
+    if (!from && !to){
+      showToast("يرجى تحديد الفترة (من / إلى) أولاً", "warning");
+      return;
+    }
+    if (from && to && to < from){
+      showToast("تاريخ (إلى) لا يمكن أن يسبق تاريخ (من)", "error");
+      return;
+    }
+
+    const matched = state.allStudents.filter(s => {
+      if (from && s.training_start < from) return false;
+      if (to && s.training_start > to) return false;
+      return true;
+    });
+
+    if (matched.length === 0){
+      showToast("لا يوجد متدربون تبدأ فترتهم ضمن هذا النطاق", "warning");
+      return;
+    }
+
+    openBulkStudentsReport(matched, { periodFrom: from, periodTo: to });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// تطبيق الفلاتر على البيانات الخام (تشمل الفئة الرئيسية والقسم معاً)
+// ---------------------------------------------------------------------------
+/**
+ * تطبيق كل الفلاتر النشطة دفعة واحدة (الاسم، الهاتف، التخصص، الفئة، القسم،
+ * فترة بداية التدريب، تاريخ التسجيل، حالة التدريب) على القائمة الكاملة
+ * state.allStudents، وإرجاع فقط السجلات المطابقة للجميع معاً (AND منطقي).
+ * @returns {Array} السجلات المطابقة لكل الفلاتر الحالية
+ */
+function getFilteredStudents(){
+  const name = document.getElementById("f_name").value.trim().toLowerCase();
+  const phone = document.getElementById("f_phone").value.trim();
+  const spec = document.getElementById("f_spec").value.trim().toLowerCase();
+  const category = state.activeCategory;
+  const dept = state.activeDepartment;
+  const start = document.getElementById("f_start").value;
+  const end = document.getElementById("f_end").value;
+  const regdate = document.getElementById("f_regdate").value;
+  const status = document.getElementById("f_status").value;
+
+  const categoryObj = category ? CATEGORIES.find(c => c.id === category) : null;
+
+  return state.allStudents.filter(s => {
+    if (name && !(s.student_name || "").toLowerCase().includes(name)) return false;
+    if (phone && !(s.phone || "").includes(phone)) return false;
+    if (spec && !(s.specialization || "").toLowerCase().includes(spec)) return false;
+    if (categoryObj && !categoryObj.departments.includes(s.department)) return false;
+    if (dept && s.department !== dept) return false;
+    if (start && s.training_start !== start) return false;
+    if (end && s.training_end !== end) return false;
+    if (regdate && s.registration_date !== regdate) return false;
+    if (status){
+      const st = getTrainingStatus(s.training_start, s.training_end).key;
+      if (st !== status) return false;
+    }
+    return true;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// تجميع السجلات المتطابقة (نفس الاسم + نفس الهاتف) دون حذف أي سجل
+// ---------------------------------------------------------------------------
+/**
+ * تجميع السجلات المتطابقة في (نفس الاسم + نفس رقم الهاتف، بعد تجاهل حالة الأحرف
+ * والمسافات الزائدة) في مجموعة واحدة، لأن الطالب الذي سجّل في أكثر من قسم
+ * يملك عدة سجلات منفصلة في القاعدة بنفس اسمه وهاتفه. لا يُحذف أو يُدمج أي سجل،
+ * فقط يُعاد ترتيبها بصرياً معاً مع فرز فترات كل طالب من الأحدث للأقدم.
+ * @param {Array} students - السجلات المطلوب تجميعها
+ * @returns {Array} مصفوفة مجموعات {student_name, phone, records[]}
+ */
+function groupDuplicateStudents(students){
+  const map = new Map();
+  students.forEach(s => {
+    const key = `${(s.student_name || "").trim().toLowerCase()}|${(s.phone || "").trim()}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(s);
+  });
+  return Array.from(map.values()).map(records => ({
+    student_name: records[0].student_name,
+    phone: records[0].phone,
+    records: records.sort((a, b) => new Date(b.training_start) - new Date(a.training_start)),
+  }));
+}
+
+/**
+ * فرز مجموعات الطلاب (بعد التجميع) حسب العمود والاتجاه المختارين حالياً في
+ * state.sortField و state.sortDir. بالنسبة لأعمدة خاصة بسجل واحد (كالقسم أو
+ * التخصص)، يُستخدم أحدث سجل في كل مجموعة كمرجع للفرز.
+ * @param {Array} groups - مجموعات الطلاب الناتجة من groupDuplicateStudents
+ * @returns {Array} نفس المجموعات بعد الفرز
+ */
+function sortGroups(groups){
+  const field = state.sortField;
+  const dir = state.sortDir === "asc" ? 1 : -1;
+
+  const keyFor = (group) => {
+    const latest = group.records[0]; // الأحدث بعد الفرز أعلاه
+    if (field === "student_name") return group.student_name || "";
+    if (field === "phone") return group.phone || "";
+    if (["specialization", "college", "department", "training_start", "training_end", "registration_date", "created_at"].includes(field)){
+      return latest[field] || "";
+    }
+    return "";
+  };
+
+  return groups.slice().sort((a, b) => {
+    const ka = keyFor(a), kb = keyFor(b);
+    if (ka < kb) return -1 * dir;
+    if (ka > kb) return 1 * dir;
+    return 0;
+  });
+}
+
+// تحديد حالة تمثيلية واحدة لمجموعة أقسام متعددة لنفس الطالب:
+// الأولوية لـ"قيد التدريب" إن وُجد قسم واحد جارٍ حالياً، ثم "لم يبدأ"، وأخيراً "انتهى" إن انتهت كل الأقسام
+/**
+ * اختيار حالة تدريب واحدة «تمثيلية» لعرضها في الصف المُجمَّع (قبل التوسيع)
+ * لطالب لديه أكثر من قسم بحالات مختلفة. الأولوية: إن وُجد قسم واحد على الأقل
+ * «قيد التدريب» تُعرض هذه الحالة، وإلا فإن وُجد قسم «لم يبدأ» تُعرض هي،
+ * وإلا (كل الأقسام منتهية) تُعرض «انتهى».
+ * @param {Array} records - كل سجلات (أقسام) الطالب الواحد
+ * @returns {{label:string, cls:string}} تسمية وصنف CSS لحالة العرض
+ */
+function getGroupStatusSummary(records){
+  const statuses = records.map(r => getTrainingStatus(r.training_start, r.training_end).key);
+  if (statuses.includes("active")) return { label: "قيد التدريب", cls: "status-active" };
+  if (statuses.includes("upcoming")) return { label: "لم يبدأ", cls: "status-upcoming" };
+  return { label: "انتهى", cls: "status-ended" };
+}
+
+// ---------------------------------------------------------------------------
+// رسم الجدول (مع الفرز، الترقيم، الصفوف القابلة للتوسيع، وزر التقرير)
+// ---------------------------------------------------------------------------
+const REPORT_COLSPAN = 11;
+
+/**
+ * الدالة الرئيسية والأكبر في لوحة التحكم: تُطبّق الفلاتر، تُجمّع السجلات المتكررة،
+ * تفرزها، ترقّمها إلى صفحات، ثم تبني HTML الجدول بالكامل — صف عادي لكل طالب
+ * بقسم واحد، أو صف ملخّص قابل للتوسيع + صف فرعي مخفي لكل قسم لطالب متعدد
+ * الأقسام. بعد إدراج HTML، تربط كل مستمعي أحداث الأزرار من جديد (تعديل، حذف،
+ * تقرير، توسيع/طي) لأن innerHTML الجديد يفقد أي مستمعين سابقين.
+ * تُستدعى بعد أي تغيير يؤثر على البيانات المعروضة (فلترة، فرز، تصفّح، حذف، تعديل).
+ */
+function renderTable(){
+  const filtered = getFilteredStudents();
+  let groups = groupDuplicateStudents(filtered);
+  groups = sortGroups(groups);
+
+  updateSortArrows();
+
+  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  state.page = Math.min(state.page, totalPages);
+  const pageGroups = groups.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
+
+  const tbody = document.getElementById("tableBody");
+
+  if (groups.length === 0){
+    tbody.innerHTML = `<tr><td colspan="${REPORT_COLSPAN}"><div class="table-empty">لا توجد نتائج مطابقة لمعايير البحث الحالية.</div></td></tr>`;
+    renderPagination(0, 1);
+    return;
+  }
+
+  let html = "";
+  pageGroups.forEach((group, gIdx) => {
+    const groupId = `grp-${gIdx}`;
+    const actionsCell = `
+      <div class="actions-cell">
+        <button class="btn-report" data-report-idx="${gIdx}">🖨️ طباعة</button>
+        <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
+      </div>`;
+
+    if (group.records.length === 1){
+      const r = group.records[0];
+      const status = getTrainingStatus(r.training_start, r.training_end);
+      const singleActionsCell = `
+        <div class="actions-cell">
+          <button class="btn-report" data-report-idx="${gIdx}">🖨️ طباعة</button>
+          <button class="btn-edit" data-edit-group="${gIdx}" data-edit-record="0">✏️ تعديل</button>
+          <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
+        </div>`;
+      html += `
         <tr>
+          <td>${escapeHtml(group.student_name)}</td>
+          <td>${escapeHtml(group.phone)}</td>
+          <td>${escapeHtml(r.college || "—")}</td>
+          <td>${escapeHtml(r.specialization)}</td>
           <td>${escapeHtml(r.department)}</td>
-          <td>${cat ? escapeHtml(cat.name) : "—"}</td>
           <td>${formatDateShort(r.training_start)}</td>
           <td>${formatDateShort(r.training_end)}</td>
           <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
+          <td>${formatDateShort(r.registration_date)}</td>
+          <td><span class="status-pill ${status.cls}">${status.label}</span></td>
+          <td>${singleActionsCell}</td>
         </tr>`;
-    }).join("");
+    } else {
+      const starts = group.records.map(r => new Date(r.training_start));
+      const ends = group.records.map(r => new Date(r.training_end));
+      const earliestStart = new Date(Math.min(...starts));
+      const latestEnd = new Date(Math.max(...ends));
+      const statusSummary = getGroupStatusSummary(group.records);
 
-  const generatedOn = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
-  const specializationLabel = sortedRecords[0] ? (sortedRecords[0].specialization || "—") : "—";
-  const collegeLabel = sortedRecords[0] ? (sortedRecords[0].college || "—") : "—";
-  const logoUrl = new URL("assets/logo.png", window.location.href).href;
-  const stampUrl = new URL("assets/stamp.png", window.location.href).href;
+      html += `
+        <tr class="group-row" data-group="${groupId}">
+          <td colspan="2">
+            <span class="toggle-caret">▾</span>${escapeHtml(group.student_name)}
+            <div class="group-subtext">${escapeHtml(group.phone)}</div>
+          </td>
+          <td colspan="3">
+            <span class="count-badge">${group.records.length} أقسام</span>
+            <span class="expand-hint">اضغط لعرض تفاصيل كل قسم ▾ (تعديل كل قسم على حدة)</span>
+          </td>
+          <td colspan="2">${formatDateShort(earliestStart.toISOString().slice(0, 10))} ← ${formatDateShort(latestEnd.toISOString().slice(0, 10))}</td>
+          <td>يختلف حسب القسم</td>
+          <td>${formatDateShort(group.records[0].registration_date)}</td>
+          <td><span class="status-pill ${statusSummary.cls}">${statusSummary.label}</span></td>
+          <td>${actionsCell}</td>
+        </tr>`;
+      group.records.forEach((r, rIdx) => {
+        const status = getTrainingStatus(r.training_start, r.training_end);
+        html += `
+          <tr class="sub-row hidden" data-parent="${groupId}">
+            <td colspan="2"></td>
+            <td>${escapeHtml(r.college || "—")}</td>
+            <td>${escapeHtml(r.specialization)}</td>
+            <td>${escapeHtml(r.department)}</td>
+            <td>${formatDateShort(r.training_start)}</td>
+            <td>${formatDateShort(r.training_end)}</td>
+            <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
+            <td>${formatDateShort(r.registration_date)}</td>
+            <td><span class="status-pill ${status.cls}">${status.label}</span></td>
+            <td>
+              <div class="actions-cell">
+                <button class="btn-edit" data-edit-group="${gIdx}" data-edit-record="${rIdx}">✏️ تعديل</button>
+                <button class="btn-delete" data-delete-record-group="${gIdx}" data-delete-record-idx="${rIdx}">🗑 حذف</button>
+              </div>
+            </td>
+          </tr>`;
+      });
+    }
+  });
 
-  return `
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(group.student_name)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-  *{ box-sizing:border-box; }
-  @page{ size: A4 portrait; margin: 12mm; }
-  body{
-    font-family:'Cairo', Tahoma, sans-serif;
-    direction: rtl;
-    color:#1B2A3A;
-    margin:0;
-    padding: 34px 42px;
-    min-height: 88vh;
-    display:flex;
-    flex-direction:column;
+  tbody.innerHTML = html;
+
+  tbody.querySelectorAll(".group-row").forEach(row => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return; // لا توسّع الصف عند الضغط على أي زر إجراء
+      const id = row.dataset.group;
+      row.classList.toggle("expanded");
+      tbody.querySelectorAll(`.sub-row[data-parent="${id}"]`).forEach(sr => sr.classList.toggle("hidden"));
+    });
+  });
+
+  tbody.querySelectorAll("[data-edit-group]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const gIdx = Number(btn.dataset.editGroup);
+      const rIdx = Number(btn.dataset.editRecord);
+      handleEditStudent(pageGroups[gIdx].records[rIdx]);
+    });
+  });
+
+  tbody.querySelectorAll("[data-delete-record-group]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const gIdx = Number(btn.dataset.deleteRecordGroup);
+      const rIdx = Number(btn.dataset.deleteRecordIdx);
+      const record = pageGroups[gIdx].records[rIdx];
+      handleDeleteStudent({ student_name: pageGroups[gIdx].student_name, records: [record] });
+    });
+  });
+
+  tbody.querySelectorAll("[data-report-idx]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.reportIdx);
+      openStudentReport(pageGroups[idx]);
+    });
+  });
+
+  tbody.querySelectorAll("[data-delete-idx]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.deleteIdx);
+      handleDeleteStudent(pageGroups[idx]);
+    });
+  });
+
+  renderPagination(groups.length, totalPages);
+}
+
+// ---------------------------------------------------------------------------
+// تعديل بيانات سجل متدرب واحد بعد تأكيد الحفظ من نافذة التعديل
+// ---------------------------------------------------------------------------
+/**
+ * معالجة الضغط على زر «✏️ تعديل» لسجل واحد: تفتح نافذة التعديل مع تعبئتها
+ * بالقيم الحالية، تنتظر قرار المستخدم (حفظ أو إلغاء)، وعند الحفظ تُرسل التعديلات
+ * إلى Supabase عبر updateStudentRecord()، ثم تُحدّث state.allStudents محلياً
+ * بنفس القيم الجديدة بدل إعادة الجلب الكامل، وتُعيد رسم كل الواجهة المتأثرة.
+ * @param {object} record - السجل (القسم الواحد) المطلوب تعديله
+ */
+async function handleEditStudent(record){
+  const updates = await showEditStudentModal(record);
+  if (!updates) return;
+
+  try {
+    await updateStudentRecord(record.id, updates);
+
+    const idx = state.allStudents.findIndex(s => s.id === record.id);
+    if (idx !== -1) state.allStudents[idx] = { ...state.allStudents[idx], ...updates };
+
+    showToast("تم حفظ التعديلات بنجاح", "success");
+    renderDepartmentCards();
+    populateDepartmentFilterOptions();
+    renderTable();
+  } catch (err){
+    console.error("فشل تعديل بيانات المتدرب:", err);
+    showToast(describeSupabaseError(err, "تعذر حفظ التعديلات"), "error");
   }
-  .report-header{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    text-align:center;
-    padding-bottom:18px;
-    border-bottom: 3px solid #0F6CBD;
-    margin-bottom: 26px;
+}
+
+// ---------------------------------------------------------------------------
+// حذف طالب (كل سجلاته عبر جميع الأقسام) بعد تأكيد صريح من المستخدم
+// ---------------------------------------------------------------------------
+/**
+ * معالجة الضغط على زر «🗑 حذف»: تعرض نافذة تأكيد صريحة أولاً (نص مختلف حسب
+ * كون الطالب بقسم واحد أو عدة أقسام)، ولا تُنفّذ أي حذف فعلي إلا بعد موافقة
+ * المستخدم. عند التأكيد، تُحذف كل السجلات الممرّرة دفعة واحدة عبر
+ * deleteStudentsByIds()، وتُزال من state.allStudents محلياً.
+ * @param {{student_name:string, records:Array}} group - مجموعة تحتوي سجلاً واحداً
+ * (حذف قسم واحد فقط) أو عدة سجلات (حذف الطالب بالكامل من كل أقسامه)
+ */
+async function handleDeleteStudent(group){
+  const multi = group.records.length > 1;
+  const confirmed = await showConfirm({
+    title: "حذف الطالب نهائياً",
+    text: multi
+      ? `سيتم حذف ${escapeHtml(group.student_name)} من جميع الأقسام (${group.records.length} سجلات). لا يمكن التراجع عن هذا الإجراء.`
+      : `سيتم حذف سجل ${escapeHtml(group.student_name)} نهائياً. لا يمكن التراجع عن هذا الإجراء.`,
+    confirmLabel: "حذف نهائياً",
+  });
+  if (!confirmed) return;
+
+  try {
+    const ids = group.records.map(r => r.id);
+    await deleteStudentsByIds(ids);
+    state.allStudents = state.allStudents.filter(s => !ids.includes(s.id));
+
+    showToast("تم حذف الطالب بنجاح", "success");
+    renderDepartmentCards();
+    populateDepartmentFilterOptions();
+    renderTable();
+  } catch (err){
+    console.error("فشل حذف الطالب:", err);
+    showToast(describeSupabaseError(err, "تعذر حذف الطالب"), "error");
   }
-  .report-header img{
-    width:64px; height:64px; object-fit:contain; margin-bottom:10px;
-  }
-  .report-header .logo-fallback{
-    width:64px;height:64px;border-radius:14px;
-    background: linear-gradient(135deg,#0F6CBD,#0A8F6A);
-    color:#fff; font-weight:800; font-size:24px;
-    display:flex;align-items:center;justify-content:center;
-    margin-bottom:10px;
-  }
-  .report-header .r-ministry{ font-size:12.5px; font-weight:700; color:#0A8F6A; margin-bottom:4px; letter-spacing:.3px; }
-  .report-header h1{ margin:0; font-size:21px; font-weight:800; color:#0F6CBD; }
-  .report-header h2{ margin:4px 0 0; font-size:13.5px; font-weight:700; color:#4B5D71; }
-  .report-header .r-date{ margin-top:8px; font-size:11.5px; color:#8A97A6; }
-
-  .student-box{
-    background:#F5F7FA;
-    border-radius:14px;
-    padding: 18px 22px;
-    margin-bottom: 26px;
-    display:grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-  }
-  .student-box .s-item .s-label{ font-size:11.5px; color:#64748B; font-weight:700; margin-bottom:4px; }
-  .student-box .s-item .s-value{ font-size:14.5px; font-weight:800; color:#1B2A3A; }
-
-  table{ width:100%; border-collapse:collapse; margin-bottom: 20px; }
-  thead th{
-    background:#0F6CBD; color:#fff; font-size:12.5px; font-weight:800;
-    padding:10px 12px; text-align:center;
-  }
-  tbody td{
-    padding:10px 12px; font-size:12.8px; text-align:center;
-    border-bottom:1px solid #E3E8EE;
-  }
-  tbody tr:nth-child(even){ background:#FAFCFE; }
-
-  .report-footer{
-    position:relative;
-    text-align:center; font-size:11px; color:#8A97A6;
-    margin-top: auto;
-    margin-bottom: 24px;
-    padding: 22px 14px 14px;
-  }
-  .report-footer .stamp-img{
-    position:absolute;
-    top:50%; left:50%;
-    transform: translate(-50%, -50%);
-    width:100px; height:100px; object-fit:contain;
-    opacity:0.75;
-    pointer-events:none;
-  }
-  .report-footer span{
-    position:relative;
-    z-index:1;
-  }
-
-  .table-wrap{ overflow-x:auto; }
-
-  .print-bar{ text-align:center; margin-bottom:20px; }
-  .print-bar button{
-    background:#0A8F6A; color:#fff; border:none; padding:10px 22px;
-    border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
-    font-family:'Cairo', Tahoma, sans-serif;
-  }
-  @media print{ .print-bar{ display:none; } body{ padding:0 24px; } }
-
-  @media (max-width: 640px){
-    body{ padding: 22px 16px; }
-    .report-header img, .report-header .logo-fallback{ width:52px; height:52px; }
-    .report-header h1{ font-size:18px; }
-    .student-box{ grid-template-columns: 1fr; padding:16px; }
-    table{ min-width: 640px; }
-  }
-</style>
-</head>
-<body>
-
-  <div class="print-bar">
-    <button onclick="window.print()">🖨️ طباعة</button>
-  </div>
-
-  <div class="report-header">
-    <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
-    <div class="r-ministry">${MINISTRY_NAME}</div>
-    <h1>${HOSPITAL_NAME}</h1>
-    <h2>${HOSPITAL_SUBTITLE}</h2>
-    <div class="r-date">تاريخ إصدار التقرير: ${generatedOn}</div>
-  </div>
-
-  <div class="student-box">
-    <div class="s-item">
-      <div class="s-label">اسم الطالب</div>
-      <div class="s-value">${escapeHtml(group.student_name)}</div>
-    </div>
-    <div class="s-item">
-      <div class="s-label">رقم الهاتف</div>
-      <div class="s-value">${escapeHtml(group.phone)}</div>
-    </div>
-    <div class="s-item">
-      <div class="s-label">التخصص</div>
-      <div class="s-value">${escapeHtml(specializationLabel)}</div>
-    </div>
-    <div class="s-item">
-      <div class="s-label">الكلية / الجامعة</div>
-      <div class="s-value">${escapeHtml(collegeLabel)}</div>
-    </div>
-  </div>
-
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>القسم</th>
-          <th>الفئة الرئيسية</th>
-          <th>بداية التدريب</th>
-          <th>نهاية التدريب</th>
-          <th>مدة التدريب</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="report-footer">
-    <img class="stamp-img" src="${stampUrl}" alt="ختم المستشفى" onerror="this.remove()">
-    <span>هذا الطلب صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}</span>
-  </div>
-
-</body>
-</html>`;
 }
 
 /**
- * طباعة تقرير مباشرة على نفس الصفحة الحالية، دون فتح أي نافذة/تبويب جديد
- * ودون استبدال المستند بالكامل (document.write) أو إعادة تحميل الصفحة بعد
- * الطباعة: تُدرِج محتوى التقرير في حاوية مخفية داخل الصفحة الحالية نفسها،
- * وتُضيف قواعد CSS خاصة بالطباعة فقط (@media print) تُخفي كل عناصر الصفحة
- * الأخرى وتُظهر هذه الحاوية فقط أثناء الطباعة الفعلية — فتبقى الصفحة كما هي
- * تماماً بصرياً طوال الوقت (المستخدم لا يرى أي تغيير على الشاشة إطلاقاً)،
- * وما إن ينتهي أمر الطباعة (حفظ أو إلغاء) حتى تُزال الحاوية والقواعد المؤقتة
- * تلقائياً دون الحاجة لإعادة تحميل الصفحة من الأساس.
- *
- * لماذا هذا الأسلوب تحديداً، بعد تجربة عدة طرق سابقة فشلت جميعها على الجوال:
- * — إطار مخفٍ (iframe): بعض متصفحات الجوال تطبع فقط النافذة العلوية دائماً،
- *   متجاهلةً تماماً استدعاء print() على أي إطار فرعي بداخلها.
- * — نافذة/تبويب منفصل (window.open): جُرِّب وعمل صحيحاً على الحاسوب، لكن
- *   اختبارات فعلية أظهرت أن بعض متصفحات الجوال قد "تعرض" ذلك التبويب بصرياً
- *   بشكل صحيح، لكن استدعاء print() عليه لا يستهدف محتواه فعلياً أثناء الطباعة
- *   الحقيقية — فتنتهي الطباعة بمحتوى الصفحة الأخرى (لوحة التحكم) بدل التقرير.
- * — استبدال المستند بالكامل (document.write) على نفس التبويب: حلّ مشكلة
- *   "أي نافذة تُطبع"، لكن ظل غير موثوق بالكامل على بعض المتصفحات، وأضاف
- *   ضرورة إعادة تحميل الصفحة بعد كل طباعة.
- *
- * أما هذا الأسلوب (حاوية مخفية + CSS خاص بالطباعة داخل نفس الصفحة الحية) فلا
- * يحتاج أي نافذة أخرى، ولا أي تنقّل (navigation)، ولا استبدال أي مستند — لذلك
- * لا يوجد أي التباس ممكن حول "أي صفحة يُطبعها المتصفح": هي نفسها الصفحة
- * المرئية أمام المستخدم دائماً، وهذا مضمون فعلياً على كل المتصفحات والأجهزة.
- *
- * ملاحظة تقنية: تُفصل قواعد @page (حجم/هامش الصفحة عند الطباعة) عن بقية
- * القواعد قبل التغليف، لأن @page لا يصح تضمينها داخل @media بحسب مواصفات CSS
- * (ستُتجاهل من المتصفح لو غُلِّفت). بقية القواعد (كل تنسيقات التقرير: الخط،
- * الجدول، الألوان...) تُغلَّف كاملة داخل @media print{...} حتى لا تؤثر إطلاقاً
- * على شكل الصفحة أثناء العرض العادي (خارج لحظة الطباعة الفعلية فقط).
- *
- * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
- * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
+ * تحديث رمز السهم (↕ / ▲ / ▼) بجانب كل عمود قابل للفرز في رأس الجدول،
+ * ليعكس العمود والاتجاه النشطين حالياً في state.sortField و state.sortDir.
  */
-function printReportHTML(html){
-  try {
-    const parser = new DOMParser();
-    const reportDoc = parser.parseFromString(html, "text/html");
-    const bodyInnerHTML = reportDoc.body.innerHTML;
-    const rawCss = Array.from(reportDoc.querySelectorAll("style")).map(s => s.textContent).join("\n");
+function updateSortArrows(){
+  document.querySelectorAll("#studentsTable thead th[data-sort]").forEach(th => {
+    const arrow = th.querySelector(".sort-arrow");
+    if (th.dataset.sort === state.sortField){
+      arrow.textContent = state.sortDir === "asc" ? "▲" : "▼";
+    } else {
+      arrow.textContent = "↕";
+    }
+  });
+}
 
-    // فصل قواعد @page (يجب أن تبقى أعلى مستوى الملف، لا يصح تضمينها داخل @media)
-    const pageRuleRegex = /@page[^{]*\{[^{}]*\}/g;
-    const pageRules = (rawCss.match(pageRuleRegex) || []).join("\n");
-    const otherCss = rawCss.replace(pageRuleRegex, "");
+/**
+ * رسم شريط التنقل أسفل الجدول: نص «عرض X - Y من أصل Z»، أزرار أرقام الصفحات
+ * (مع نقاط اختصار «…» عند وجود صفحات كثيرة)، وزري السابق/التالي. يُخفي نفسه
+ * كلياً إن لم توجد نتائج.
+ * @param {number} totalItems - إجمالي عدد المجموعات (الطلاب) بعد الفلترة
+ * @param {number} totalPages - إجمالي عدد الصفحات الناتج
+ */
+function renderPagination(totalItems, totalPages){
+  const el = document.getElementById("pagination");
+  if (totalItems === 0){ el.innerHTML = ""; return; }
 
-    // إزالة أي بقايا من طباعة سابقة لم تُنظَّف (احتياط فقط، نادراً ما يحدث)
-    const prevContainer = document.getElementById("__printReportContainer");
-    if (prevContainer) prevContainer.remove();
-    const prevStyle = document.getElementById("__printReportStyle");
-    if (prevStyle) prevStyle.remove();
+  const from = (state.page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(state.page * PAGE_SIZE, totalItems);
 
-    const styleEl = document.createElement("style");
-    styleEl.id = "__printReportStyle";
-    styleEl.textContent = `
-      #__printReportContainer{ display:none; }
-      @media print{
-        body > *:not(#__printReportContainer){ display:none !important; }
-        #__printReportContainer{ display:block !important; }
-      }
-      ${pageRules}
-      @media print{ ${otherCss} }
-    `;
-    document.head.appendChild(styleEl);
-
-    const container = document.createElement("div");
-    container.id = "__printReportContainer";
-    container.innerHTML = bodyInnerHTML;
-    document.body.appendChild(container);
-
-    // التنظيف بعد انتهاء الطباعة: نعتمد على أكثر من إشارة معاً (أيهما يحدث
-    // أولاً)، لأن حدث afterprint وحده قد لا يُطلَق بشكل موثوق على كل
-    // المتصفحات (خصوصاً عند اختيار "حفظ كـ PDF" بدل الطباعة الفعلية على بعض
-    // الأجهزة) — فيبقى محتوى التقرير عالقاً في الصفحة دون تنظيف حتى يُعاد
-    // تحميلها يدوياً. حارس cleaned يمنع التنظيف المزدوج إن أُطلقت أكثر من
-    // إشارة، ومهلة احتياطية قصوى (safetyTimer) تضمن عدم بقاء الصفحة عالقة
-    // إطلاقاً حتى لو فشلت كل الإشارات الأخرى معاً.
-    let cleaned = false;
-    const cleanup = () => {
-      if (cleaned) return;
-      cleaned = true;
-      window.removeEventListener("afterprint", cleanup);
-      window.removeEventListener("focus", cleanup);
-      clearTimeout(safetyTimer);
-      if (container.parentNode) container.remove();
-      if (styleEl.parentNode) styleEl.remove();
-    };
-    window.addEventListener("afterprint", cleanup);
-    const safetyTimer = setTimeout(cleanup, 120000); // مهلة احتياطية قصوى: دقيقتان
-
-    window.focus();
-    window.print();
-
-    // نُسجِّل الاستماع لحدث focus (كإشارة احتياطية ثانية لانتهاء الطباعة) بعد
-    // تأخير قصير فقط، لا فوراً — لتفادي التقاط أي حدث تركيز زائف قد يُطلقه
-    // استدعاء window.focus() أعلاه نفسه، والذي كان سيُنظّف الحاوية فوراً قبل
-    // أن تُفتح نافذة الطباعة أصلاً
-    setTimeout(() => window.addEventListener("focus", cleanup), 400);
-  } catch (err){
-    console.error("فشلت طباعة التقرير:", err);
-    // تنظيف أي بقايا جزئية إن حدث الخطأ أثناء الإدراج، لضمان عدم ترك الصفحة في حالة غير متسقة
-    const c = document.getElementById("__printReportContainer");
-    if (c) c.remove();
-    const s = document.getElementById("__printReportStyle");
-    if (s) s.remove();
-    if (typeof showToast === "function"){
-      showToast("تعذّرت طباعة التقرير، يرجى إعادة المحاولة", "error");
+  let buttons = "";
+  for (let p = 1; p <= totalPages; p++){
+    if (p === 1 || p === totalPages || Math.abs(p - state.page) <= 1){
+      buttons += `<button data-page="${p}" class="${p === state.page ? "active" : ""}">${p}</button>`;
+    } else if (buttons.slice(-3) !== "…</span>" && (p === state.page - 2 || p === state.page + 2)){
+      buttons += `<span style="padding:0 4px;color:var(--text-muted)">…</span>`;
     }
   }
-}
 
-/**
- * طباعة تقرير طالب واحد (من buildReportHTML) مباشرة عبر printReportHTML() —
- * راجع تعليقها أعلاه لتفاصيل الآلية.
- * @param {object} group - بيانات الطالب الممررة كما هي إلى buildReportHTML
- */
-function openStudentReport(group){
-  printReportHTML(buildReportHTML(group));
-}
+  el.innerHTML = `
+    <div class="p-info">عرض ${from} - ${to} من أصل ${totalItems} سجل</div>
+    <div class="p-controls">
+      <button ${state.page === 1 ? "disabled" : ""} data-page="${state.page - 1}">‹</button>
+      ${buttons}
+      <button ${state.page === totalPages ? "disabled" : ""} data-page="${state.page + 1}">›</button>
+    </div>`;
 
-// ============================================================================
-// تقرير عام قابل للطباعة يضم كل المتدربين المطابقين للفلاتر الحالية
-// (يُستخدم من لوحة التحكم بدلاً من تصدير Excel)
-// ============================================================================
-
-/**
- * بناء صفحة HTML مستقلة لتقرير عام يضم عدة متدربين دفعة واحدة (تقرير الفترة
- * المحددة من لوحة التحكم). الجدول بعرض ثابت النسب (table-layout: fixed) بحيث
- * تتّسع كل الأعمدة العشرة دائماً داخل عرض صفحة A4 الأفقية دون تمرير أفقي أو
- * خطوط رأسية، ورأس الجدول (thead) يتكرر تلقائياً أعلى كل صفحة جديدة عند
- * تجاوز البيانات لصفحة واحدة أثناء الطباعة.
- * @param {Array} students - السجلات المطلوب تضمينها (نتيجة فلترة حسب الفترة عادة)
- * @param {{periodFrom?:string, periodTo?:string}} periodInfo - حدود الفترة المستخدمة، لعرضها فقط في شريط الملخص
- * @returns {string} نص HTML كامل جاهز لكتابته في مستند نافذة جديدة
- */
-function buildBulkReportHTML(students, periodInfo = {}){
-  const sorted = students
-    .slice()
-    .sort((a, b) => (a.student_name || "").localeCompare(b.student_name, "ar") || new Date(a.training_start) - new Date(b.training_start));
-
-  const rows = sorted.map(r => {
-    const status = getTrainingStatus(r.training_start, r.training_end);
-    return `
-      <tr>
-        <td>${escapeHtml(r.student_name)}</td>
-        <td>${escapeHtml(r.phone)}</td>
-        <td>${escapeHtml(r.college || "—")}</td>
-        <td>${escapeHtml(r.specialization)}</td>
-        <td>${escapeHtml(r.department)}</td>
-        <td>${formatDateShort(r.training_start)}</td>
-        <td>${formatDateShort(r.training_end)}</td>
-        <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
-        <td>${formatDateShort(r.registration_date)}</td>
-        <td><span class="r-status ${status.cls}">${status.label}</span></td>
-      </tr>`;
-  }).join("");
-
-  const generatedOn = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
-  const logoUrl = new URL("assets/logo.png", window.location.href).href;
-
-  const periodLabel = (periodInfo.periodFrom || periodInfo.periodTo)
-    ? `الفترة: من ${periodInfo.periodFrom ? formatDateShort(periodInfo.periodFrom) : "البداية"} إلى ${periodInfo.periodTo ? formatDateShort(periodInfo.periodTo) : "الآن"}`
-    : "جميع الفترات";
-
-  return `
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تقرير المتدربين</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-  /* حجم الصفحة عند الطباعة/الحفظ كـ PDF: A4 أفقي (Landscape) بهوامش صغيرة */
-  @page{ size: A4 landscape; margin: 10mm; }
-
-  *{ box-sizing:border-box; }
-  body{
-    font-family:'Cairo', Tahoma, sans-serif;
-    direction: rtl;
-    color:#1B2A3A;
-    margin:0 auto;
-    padding: 24px 30px;
-    max-width: 1150px; /* يقارب عرض صفحة A4 الأفقية على الشاشة قبل الطباعة */
-  }
-  .report-header{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    text-align:center;
-    padding-bottom:18px;
-    border-bottom: 3px solid #0F6CBD;
-    margin-bottom: 20px;
-  }
-  .report-header img{ width:64px; height:64px; object-fit:contain; margin-bottom:10px; }
-  .report-header .logo-fallback{
-    width:64px;height:64px;border-radius:14px;
-    background: linear-gradient(135deg,#0F6CBD,#0A8F6A);
-    color:#fff; font-weight:800; font-size:24px;
-    display:flex;align-items:center;justify-content:center;
-    margin-bottom:10px;
-  }
-  .report-header .r-ministry{ font-size:12.5px; font-weight:700; color:#0A8F6A; margin-bottom:4px; letter-spacing:.3px; }
-  .report-header h1{ margin:0; font-size:21px; font-weight:800; color:#0F6CBD; }
-  .report-header h2{ margin:4px 0 0; font-size:13.5px; font-weight:700; color:#4B5D71; }
-  .report-header .r-title{ margin-top:10px; font-size:15px; font-weight:800; color:#1B2A3A; }
-  .report-header .r-date{ margin-top:6px; font-size:11.5px; color:#8A97A6; }
-
-  .summary-bar{
-    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
-    background:#F5F7FA; border-radius:12px; padding:12px 18px; margin-bottom:20px;
-    font-size:12.6px; font-weight:700; color:#31465C;
-  }
-  .summary-bar span.count{ color:#0A8F6A; }
-
-  /* ===== الجدول: عرض ثابت النسب ليتّسع كل الأعمدة داخل عرض صفحة A4 الأفقية دائماً،
-     بدون أي تمرير أفقي وبدون أي خطوط رأسية بين الأعمدة (فواصل صفوف فقط) ===== */
-  table{
-    width:100%;
-    border-collapse:collapse;
-    table-layout: fixed; /* يجبر الأعمدة على الالتزام بالعرض المحدد في colgroup بدل التمدد حسب المحتوى */
-    margin-bottom: 20px;
-  }
-  /* لا حدود جانبية إطلاقاً على الجدول أو الخلايا — فقط خط أفقي رفيع يفصل بين الصفوف */
-  table, th, td{ border-left:none; border-right:none; border-top:none; }
-
-  /* تكرار صف رأس الجدول تلقائياً أعلى كل صفحة جديدة عند الطباعة إذا تجاوزت البيانات صفحة واحدة */
-  thead{ display: table-header-group; }
-  tbody{ display: table-row-group; }
-  tr{ page-break-inside: avoid; } /* يمنع تقطيع منتصف صف واحد بين صفحتين */
-
-  thead th{
-    background:#0F6CBD; color:#fff; font-size:10.8px; font-weight:800;
-    padding:8px 6px; text-align:center;
-    word-break: break-word; /* يسمح بلف النص بدل تمديد العمود وكسر الصفحة */
-  }
-  tbody td{
-    padding:7px 6px; font-size:10.5px; text-align:center;
-    border-bottom:1px solid #E3E8EE;
-    word-break: break-word;
-  }
-  tbody tr:nth-child(even){ background:#FAFCFE; }
-
-  .r-status{ display:inline-block; padding:4px 11px; border-radius:999px; font-size:10px; font-weight:800; }
-  .status-active{ background:#E7F7EF; color:#0A8F6A; }
-  .status-upcoming{ background:#E9F1FC; color:#0F6CBD; }
-  .status-ended{ background:#EEF1F4; color:#5B6B7C; }
-
-  .report-footer{
-    text-align:center; font-size:11px; color:#8A97A6; margin-top: 30px;
-    border-top:1px dashed #E3E8EE; padding-top:14px;
-  }
-
-  /* عند الطباعة الفعلية: نخفي زر الطباعة نفسه، ونزيل الحشو الإضافي لأن @page يضبط الهامش الفعلي */
-  .print-bar{ text-align:center; margin-bottom:20px; }
-  .print-bar button{
-    background:#0A8F6A; color:#fff; border:none; padding:10px 22px;
-    border-radius:10px; font-weight:800; font-size:13.5px; cursor:pointer;
-    font-family:'Cairo', Tahoma, sans-serif;
-  }
-  @media print{
-    .print-bar{ display:none; }
-    body{ padding:0; max-width:none; }
-  }
-
-  @media (max-width: 640px){
-    body{ padding: 18px 14px; }
-    .report-header img, .report-header .logo-fallback{ width:52px; height:52px; }
-    .report-header h1{ font-size:18px; }
-    thead th, tbody td{ font-size:9.5px; padding:6px 4px; }
-  }
-</style>
-</head>
-<body>
-
-  <div class="print-bar">
-    <button onclick="window.print()">🖨️ طباعة</button>
-  </div>
-
-  <div class="report-header">
-    <img src="${logoUrl}" alt="شعار المستشفى" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo-fallback',textContent:'إ'}))">
-    <div class="r-ministry">${MINISTRY_NAME}</div>
-    <h1>${HOSPITAL_NAME}</h1>
-    <h2>${HOSPITAL_SUBTITLE}</h2>
-    <div class="r-title">تقرير عام بالمتدربين</div>
-    <div class="r-date">تاريخ إصدار التقرير: ${generatedOn}</div>
-  </div>
-
-  <div class="summary-bar">
-    <span>${periodLabel}</span>
-    <span>عدد السجلات: <span class="count">${sorted.length}</span></span>
-  </div>
-
-  <table>
-    <!-- عرض كل عمود بالنسبة المئوية بحيث يكون المجموع 100% دائماً، مهما كان محتوى الصفوف -->
-    <colgroup>
-      <col style="width:13%"> <!-- اسم الطالب -->
-      <col style="width:9%">  <!-- رقم الهاتف -->
-      <col style="width:12%"> <!-- الكلية -->
-      <col style="width:11%"> <!-- التخصص -->
-      <col style="width:13%"> <!-- القسم -->
-      <col style="width:8%">  <!-- بداية التدريب -->
-      <col style="width:8%">  <!-- نهاية التدريب -->
-      <col style="width:8%">  <!-- مدة التدريب -->
-      <col style="width:9%">  <!-- تاريخ التسجيل -->
-      <col style="width:9%">  <!-- الحالة -->
-    </colgroup>
-    <thead>
-      <tr>
-        <th>اسم الطالب</th>
-        <th>رقم الهاتف</th>
-        <th>الكلية</th>
-        <th>التخصص</th>
-        <th>القسم</th>
-        <th>بداية التدريب</th>
-        <th>نهاية التدريب</th>
-        <th>مدة التدريب</th>
-        <th>تاريخ التسجيل</th>
-        <th>الحالة</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  </table>
-
-  <div class="report-footer">
-    هذا الطلب صادر آلياً من نظام تسجيل وإدارة المتدربين — ${HOSPITAL_SUBTITLE}
-  </div>
-
-</body>
-</html>`;
-}
-
-/**
- * فتح التقرير العام لعدة متدربين معاً (من buildBulkReportHTML) عبر
- * printReportHTML() — بنفس منطق openStudentReport() تماماً
- * (راجع تعليق printReportHTML() أعلاه لتفاصيل الآلية).
- * @param {Array} students - السجلات الممررة كما هي إلى buildBulkReportHTML
- * @param {object} periodInfo - حدود الفترة الممررة كما هي إلى buildBulkReportHTML
- */
-function openBulkStudentsReport(students, periodInfo = {}){
-  printReportHTML(buildBulkReportHTML(students, periodInfo));
+  el.querySelectorAll("button[data-page]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.page = Number(btn.dataset.page);
+      renderTable();
+    });
+  });
 }
