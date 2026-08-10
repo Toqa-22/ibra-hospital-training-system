@@ -61,6 +61,7 @@ function buildReportHTML(group){
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   *{ box-sizing:border-box; }
+  @page{ size: A4 portrait; margin: 12mm; }
   body{
     font-family:'Cairo', Tahoma, sans-serif;
     direction: rtl;
@@ -208,13 +209,23 @@ function buildReportHTML(group){
 
 /**
  * طباعة صفحة HTML تقرير مباشرة دون فتح أي نافذة أو تبويب منبثق مرئي: تُنشئ
- * إطاراً مخفياً (iframe) بحجم صفر خارج حدود الشاشة، تُحمِّل محتوى التقرير
- * بداخله عبر رابط Blob (وليس عبر document.write، الذي قد يتسبب أحياناً بحدثي
- * "load" متضاربين مع تحميل about:blank الأولي للإطار)، وتستدعي طباعته تلقائياً
- * فور اكتمال تحميله — فتظهر نافذة الطباعة مباشرة فوق الصفحة الحالية بنقرة
- * واحدة على «🖨️ طباعة» من الجدول، دون أي "صفحة تقرير" وسيطة يراها المستخدم
- * أو يحتاج يضغط بداخلها زر طباعة ثانٍ. الإطار المخفي يُزال تلقائياً من
- * الصفحة بعد إغلاق نافذة الطباعة (عبر الحدث afterprint).
+ * إطاراً بأبعاد حقيقية (وليس 0×0) لكن موضوعاً خارج حدود الشاشة تماماً، تُحمِّل
+ * محتوى التقرير بداخله عبر رابط Blob (وليس عبر document.write، الذي قد يتسبب
+ * أحياناً بحدثي "load" متضاربين مع تحميل about:blank الأولي للإطار)، وتستدعي
+ * طباعته تلقائياً فور اكتمال تحميله — فتظهر نافذة الطباعة مباشرة فوق الصفحة
+ * الحالية بنقرة واحدة على «🖨️ طباعة» من الجدول، دون أي "صفحة تقرير" وسيطة
+ * يراها المستخدم أو يحتاج يضغط بداخلها زر طباعة ثانٍ.
+ *
+ * ملاحظة مهمة عن الأبعاد: الإطار يُعطى عرضاً وارتفاعاً حقيقيين (بدل 0×0 أو
+ * visibility:hidden كما كانت سابقاً) لأن أغلب متصفحات الجوال (خاصة Safari على
+ * آيفون، وكثير من متصفحات أندرويد) لا تُنسّق ولا تطبع محتوى إطار بأبعاد صفرية
+ * أو مخفٍّ بـ visibility:hidden — فينتج عنه طباعة فارغة أو ناقصة على الجوال
+ * حتى لو ظهرت التوصيف صحيحة على الحاسوب المكتبي. لذلك يُستخدم بدلاً من ذلك
+ * إخفاء بصري عبر تحريك الإطار خارج نطاق الشاشة المرئي (position: fixed مع
+ * إحداثيات سالبة كبيرة)، مع إبقاء أبعاده الفعلية طبيعية ليُنسَّق محتواه
+ * ويُطبع بشكل صحيح على كل الأجهزة.
+ *
+ * الإطار يُزال تلقائياً من الصفحة بعد إغلاق نافذة الطباعة (عبر الحدث afterprint).
  * تُستخدم داخلياً من openStudentReport() وopenBulkStudentsReport() فقط.
  * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
  */
@@ -224,11 +235,10 @@ function printReportHTML(html){
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
   iframe.style.top = "0";
-  iframe.style.left = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
+  iframe.style.left = "-10000px"; // خارج حدود الشاشة تماماً، وليس مخفياً بحجم صفري
+  iframe.style.width = "1200px";
+  iframe.style.height = "900px";
   iframe.style.border = "0";
-  iframe.style.visibility = "hidden";
 
   iframe.addEventListener("load", () => {
     URL.revokeObjectURL(blobUrl);
