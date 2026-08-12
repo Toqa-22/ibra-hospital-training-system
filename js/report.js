@@ -299,25 +299,59 @@ function printReportHTML(html){
     document.body.appendChild(container);
 
     let cleaned = false;
+    let safetyTimer = null;
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
       window.removeEventListener("afterprint", cleanup);
       window.removeEventListener("focus", cleanup);
-      clearTimeout(safetyTimer);
+      if (safetyTimer) clearTimeout(safetyTimer);
       if (container.parentNode) container.remove();
       if (styleEl.parentNode) styleEl.remove();
       document.title = originalTitle;
     };
-    window.addEventListener("afterprint", cleanup);
-    const safetyTimer = setTimeout(cleanup, 120000); // مهلة احتياطية قصوى: دقيقتان
 
-    window.focus();
-    window.print();
+    // ننتظر اكتمال تحميل/فك ترميز كل الصور بداخل الحاوية (الشعار، الختم،
+    // صورة الترويسة) قبل استدعاء print() فعلياً. هذه الصور جميعها Data URI
+    // كبيرة نسبياً (خصوصاً الختم والترويسة)، واستدعاء print() بشكل متزامن
+    // فوري مباشرة بعد إدراج الـ HTML (كما كان سابقاً) قد يسبق انتهاء المتصفح
+    // فعلياً من فك ترميز الصورة وترسيمها — خصوصاً على متصفحات الجوال — فتظهر
+    // الصورة فارغة تماماً (كما في حالة صورة الترويسة) أو كمربع فارغ بلا محتوى
+    // (كما في حالة صورة الختم) داخل مخرجات الطباعة رغم أن الصورة نفسها سليمة.
+    // ننتظر هنا لأقصى مدة 3 ثوانٍ فقط كسقف احتياطي، حتى لا تتعطل الطباعة لو
+    // تعذّر تحميل صورة ما لأي سبب.
+    const waitForImage = (img) => {
+      const decodeIfPossible = () =>
+        (typeof img.decode === "function") ? img.decode().catch(() => {}) : Promise.resolve();
+      if (img.complete && img.naturalWidth > 0) return decodeIfPossible();
+      return new Promise((resolve) => {
+        img.addEventListener("load", () => decodeIfPossible().then(resolve), { once: true });
+        img.addEventListener("error", resolve, { once: true });
+      });
+    };
+    const imgs = Array.from(container.querySelectorAll("img"));
+    const imagesReady = Promise.all(imgs.map(waitForImage));
+    const readyTimeout = new Promise((resolve) => setTimeout(resolve, 3000));
 
-    // نُسجِّل الاستماع لحدث focus (إشارة احتياطية ثانية) بعد تأخير قصير فقط،
-    // لتفادي التقاط أي حدث تركيز زائف فوري ناتج عن استدعاء window.focus() نفسه
-    setTimeout(() => window.addEventListener("focus", cleanup), 400);
+    Promise.race([imagesReady, readyTimeout]).then(() => {
+      window.addEventListener("afterprint", cleanup);
+      safetyTimer = setTimeout(cleanup, 120000); // مهلة احتياطية قصوى: دقيقتان
+
+      window.focus();
+      window.print();
+
+      // نُسجِّل الاستماع لحدث focus (إشارة احتياطية ثانية) بعد تأخير قصير فقط،
+      // لتفادي التقاط أي حدث تركيز زائف فوري ناتج عن استدعاء window.focus() نفسه
+      setTimeout(() => window.addEventListener("focus", cleanup), 400);
+    }).catch(() => {
+      // احتياط إضافي: لو تعطّل انتظار الصور لأي سبب غير متوقع، نطبع فوراً
+      // بدل ترك المستخدم بلا أي استجابة إطلاقاً.
+      window.addEventListener("afterprint", cleanup);
+      safetyTimer = setTimeout(cleanup, 120000);
+      window.focus();
+      window.print();
+      setTimeout(() => window.addEventListener("focus", cleanup), 400);
+    });
   } catch (err){
     console.error("فشلت طباعة التقرير:", err);
     document.title = originalTitle;
