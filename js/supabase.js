@@ -292,3 +292,57 @@ async function fetchWaitlistStudents(){
   if (error) throw error;
   return data || [];
 }
+
+// ============================================================================
+// تقييم المتدرب (جدول evaluations) — راجع sql/add_evaluations_feature.sql
+// ============================================================================
+const EVALUATIONS_TABLE = "evaluations";
+
+// -------- جلب آخر تقييم محفوظ لطالب معيّن (إن وُجد) --------
+/**
+ * جلب آخر سجل تقييم محفوظ لطالب معيّن عبر معرّفه (student_id)، إن وُجد.
+ * تُستخدم عند فتح نموذج «📋 التقييم» لتحميل آخر تقييم محفوظ لهذا الطالب
+ * تلقائياً بدل البدء من نموذج فارغ في كل مرة (وضع تعديل بدل إنشاء جديد دائماً).
+ * @param {string} studentId - معرّف UUID لسجل الطالب في جدول students
+ * @returns {object|null} أحدث سجل تقييم لهذا الطالب، أو null إن لم يوجد أي تقييم سابق
+ */
+async function fetchLatestEvaluationForStudent(studentId){
+  const { data, error } = await supabaseClient
+    .from(EVALUATIONS_TABLE)
+    .select("*")
+    .eq("student_id", studentId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return (data && data[0]) || null;
+}
+
+// -------- حفظ تقييم (إنشاء جديد أو تحديث تقييم موجود) --------
+/**
+ * حفظ نموذج تقييم متدرب: تُحدِّث السجل الموجود إن كان لديه id سابق (تعديل
+ * تقييم محفوظ مسبقاً)، أو تُنشئ سجلاً جديداً إن لم يوجد id (أول تقييم لهذا
+ * الطالب). تُستخدم من زر «💾 حفظ التقييم» في نافذة التقييم.
+ * @param {object} payload - بيانات التقييم الكاملة؛ يتضمن id اختيارياً للتحديث
+ * @returns {object} السجل بعد الحفظ كما أرجعته Supabase
+ */
+async function saveEvaluation(payload){
+  const { id, ...fields } = payload;
+
+  if (id){
+    const { data, error } = await supabaseClient
+      .from(EVALUATIONS_TABLE)
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select();
+    if (error) throw error;
+    return data && data[0];
+  }
+
+  const { data, error } = await supabaseClient
+    .from(EVALUATIONS_TABLE)
+    .insert(fields)
+    .select();
+  if (error) throw error;
+  return data && data[0];
+}
