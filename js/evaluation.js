@@ -395,7 +395,8 @@ function buildEvaluationPrintHTML(data){
     margin-top:26px;
   }
   .sign-row .sign-block{ text-align:center; width:45%; }
-  .sign-row .sign-line{ border-top:1px solid #1B2A3A; margin-top:26px; padding-top:4px; font-size:10.5px; }
+  .sign-row .sign-name{ min-height:16px; font-weight:700; font-size:11.5px; }
+  .sign-row .sign-line{ border-top:1px solid #1B2A3A; margin-top:10px; padding-top:4px; font-size:10.5px; }
 
   .cert-header{
     text-align:center;
@@ -472,10 +473,12 @@ function buildEvaluationPrintHTML(data){
 
     <div class="sign-row">
       <div class="sign-block">
-        <div class="sign-line">Name of Immediate Supervisor: ${escapeHtml(data.supervisor_name)}</div>
+        <div class="sign-name">${escapeHtml(data.supervisor_name)}</div>
+        <div class="sign-line">Name of Immediate Supervisor</div>
       </div>
       <div class="sign-block">
-        <div class="sign-line">&nbsp;<br>Signature</div>
+        <div class="sign-name">&nbsp;</div>
+        <div class="sign-line">Signature</div>
       </div>
     </div>
     <div class="p-row" style="margin-top:14px"><span class="p-label">Date:</span><span class="p-value">${escapeHtml(formatDateShort(data.evaluation_date))}</span></div>
