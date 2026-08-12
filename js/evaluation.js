@@ -397,6 +397,27 @@ function buildEvaluationPrintHTML(data){
   .sign-row .sign-block{ text-align:center; width:45%; }
   .sign-row .sign-line{ border-top:1px solid #1B2A3A; margin-top:26px; padding-top:4px; font-size:10.5px; }
 
+  .cert-header{
+    text-align:center;
+    margin-bottom:14px;
+  }
+  .cert-header .dept-line{
+    font-weight:800;
+    font-size:12.5px;
+    margin:0 0 10px;
+  }
+  .cert-header .to-whom{
+    font-weight:800;
+    font-size:12px;
+    margin:0 0 8px;
+    text-decoration:underline;
+  }
+  .cert-header .cert-text{
+    font-size:11.5px;
+    margin:0;
+    text-align:left;
+  }
+
   @media print{
     body{ margin:0; }
   }
@@ -407,6 +428,12 @@ function buildEvaluationPrintHTML(data){
   <img class="letterhead-bg" src="${LETTERHEAD_IMAGE_DATA_URI}" alt="">
 
   <div class="eval-page-content">
+
+    <div class="cert-header">
+      <p class="dept-line">Professional Development &amp; Career Guidance Department</p>
+      <p class="to-whom">To Whom It May Concern</p>
+      <p class="cert-text">This is to certify that the trainee below has attended practical placement at Ibra Hospital:</p>
+    </div>
 
     <h3 class="sec-title">A. PERSONAL PARTICULARS</h3>
     <div class="p-row"><span class="p-label">Name of Student:</span><span class="p-value">${escapeHtml(data.student_name)}</span></div>
