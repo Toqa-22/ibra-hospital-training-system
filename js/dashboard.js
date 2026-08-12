@@ -2,7 +2,8 @@
 // dashboard.js
 // منطق لوحة إدارة المتدربين (dashboard.html) بالكامل: بطاقات الأقسام، شريط
 // تصفية الفئات، لوحة الفلاتر التسعة، الجدول القابل للفرز/التوسيع/الترقيم،
-// أزرار التعديل والحذف والتقرير لكل سجل، ولوحة طباعة تقرير الفترة المستقلة.
+// أزرار التعديل والحذف والتقرير والتقييم لكل سجل، ولوحة طباعة تقرير الفترة
+// المستقلة.
 //
 // الاعتماديات المطلوب تحميلها قبل هذا الملف (بنفس الترتيب في dashboard.html):
 //   1) js/config.js       — بيانات الاتصال بـ Supabase
@@ -11,6 +12,7 @@
 //                            calcDurationDays, formatDurationLabel, getTrainingStatus...
 //   4) js/supabase.js     — يوفر fetchAllStudents, updateStudentRecord, deleteStudentsByIds
 //   5) js/report.js       — يوفر openStudentReport() و openBulkStudentsReport()
+//   6) js/evaluation.js   — يوفر showEvaluationModal() (زر «📋 تقييم» لكل صف)
 //
 // كل البيانات تُجلب مرة واحدة فقط عند تحميل الصفحة (loadStudents) وتُخزَّن في
 // state.allStudents؛ أي فلترة أو فرز أو تعديل أو حذف لاحق يعمل محلياً على هذه
@@ -257,7 +259,12 @@ function bindStaticEvents(){
       return;
     }
 
-    openBulkStudentsReport(matched, { periodFrom: from, periodTo: to });
+    try {
+      openBulkStudentsReport(matched, { periodFrom: from, periodTo: to });
+    } catch (err){
+      console.error("فشل فتح التقرير العام:", err);
+      showToast("تعذر فتح التقرير، يرجى المحاولة مرة أخرى", "error");
+    }
   });
 }
 
@@ -409,6 +416,7 @@ function renderTable(){
     const actionsCell = `
       <div class="actions-cell">
         <button class="btn-report" data-report-idx="${gIdx}">🖨️ طباعة</button>
+        <button class="btn-eval" data-eval-idx="${gIdx}">📋 تقييم</button>
         <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
       </div>`;
 
@@ -418,6 +426,7 @@ function renderTable(){
       const singleActionsCell = `
         <div class="actions-cell">
           <button class="btn-report" data-report-idx="${gIdx}">🖨️ طباعة</button>
+          <button class="btn-eval" data-eval-idx="${gIdx}">📋 تقييم</button>
           <button class="btn-edit" data-edit-group="${gIdx}" data-edit-record="0">✏️ تعديل</button>
           <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
         </div>`;
@@ -516,7 +525,25 @@ function renderTable(){
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const idx = Number(btn.dataset.reportIdx);
-      openStudentReport(pageGroups[idx]);
+      try {
+        openStudentReport(pageGroups[idx]);
+      } catch (err){
+        console.error("فشل فتح تقرير الطالب:", err);
+        showToast("تعذر فتح التقرير، يرجى المحاولة مرة أخرى", "error");
+      }
+    });
+  });
+
+  tbody.querySelectorAll("[data-eval-idx]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.evalIdx);
+      try {
+        showEvaluationModal(pageGroups[idx]);
+      } catch (err){
+        console.error("فشل فتح نافذة التقييم:", err);
+        showToast("تعذر فتح نافذة التقييم، يرجى المحاولة مرة أخرى", "error");
+      }
     });
   });
 
