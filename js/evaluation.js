@@ -472,7 +472,7 @@ function buildEvaluationPrintHTML(data){
 
     <div class="sign-row">
       <div class="sign-block">
-        <div class="sign-line">${escapeHtml(data.supervisor_name)}<br>Name of Immediate Supervisor</div>
+        <div class="sign-line">Name of Immediate Supervisor: ${escapeHtml(data.supervisor_name)}</div>
       </div>
       <div class="sign-block">
         <div class="sign-line">&nbsp;<br>Signature</div>
