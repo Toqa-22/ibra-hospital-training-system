@@ -248,11 +248,13 @@ function buildReportHTML(group){
  * @param {string} html - محتوى صفحة التقرير الكامل (من buildReportHTML أو buildBulkReportHTML)
  */
 function printReportHTML(html){
+  const originalTitle = document.title;
   try {
     const parser = new DOMParser();
     const reportDoc = parser.parseFromString(html, "text/html");
     const bodyInnerHTML = reportDoc.body.innerHTML;
     const rawCss = Array.from(reportDoc.querySelectorAll("style")).map(s => s.textContent).join("\n");
+    const reportTitle = reportDoc.title || document.title;
 
     // فصل قواعد @page (يجب أن تبقى أعلى مستوى الملف، لا يصح تضمينها داخل @media)
     const pageRuleRegex = /@page[^{]*\{[^{}]*\}/g;
@@ -264,6 +266,12 @@ function printReportHTML(html){
     if (prevContainer) prevContainer.remove();
     const prevStyle = document.getElementById("__printReportStyle");
     if (prevStyle) prevStyle.remove();
+
+    // تغيير عنوان الصفحة مؤقتاً لعنوان التقرير (بدل عنوان لوحة التحكم) — لأن
+    // هذا الأسلوب يطبع نفس الصفحة الحالية دون أي تنقّل، فعنوان المستند الأصلي
+    // لن يتغيّر تلقائياً وحده أبداً؛ وهذا العنوان تحديداً هو ما يقترحه المتصفح
+    // كاسم الملف الافتراضي عند اختيار "حفظ كـ PDF" من نافذة الطباعة.
+    document.title = reportTitle;
 
     const styleEl = document.createElement("style");
     styleEl.id = "__printReportStyle";
@@ -292,6 +300,7 @@ function printReportHTML(html){
       clearTimeout(safetyTimer);
       if (container.parentNode) container.remove();
       if (styleEl.parentNode) styleEl.remove();
+      document.title = originalTitle;
     };
     window.addEventListener("afterprint", cleanup);
     const safetyTimer = setTimeout(cleanup, 120000); // مهلة احتياطية قصوى: دقيقتان
@@ -304,6 +313,7 @@ function printReportHTML(html){
     setTimeout(() => window.addEventListener("focus", cleanup), 400);
   } catch (err){
     console.error("فشلت طباعة التقرير:", err);
+    document.title = originalTitle;
     const c = document.getElementById("__printReportContainer");
     if (c) c.remove();
     const s = document.getElementById("__printReportStyle");
