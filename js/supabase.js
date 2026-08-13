@@ -195,6 +195,8 @@ async function updateStudentRecord(id, updates){
     phone: String(updates.phone).trim(),
     specialization: updates.specialization.trim(),
     college: (updates.college || "").trim() || null,
+    gender: (updates.gender || "").trim() || null,
+    training_type: (updates.training_type || "").trim() || null,
     department: updates.department.trim(),
     training_start: updates.training_start,
     training_end: updates.training_end,
