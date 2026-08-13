@@ -53,6 +53,7 @@
       <a href="index.html" class="active">تسجيل متدرب</a>
       <a href="waiting.html">⏳ قائمة الانتظار</a>
       <a href="dashboard.html">لوحة الإدارة</a>
+      <a href="reports.html">تقارير</a>
     </nav>
   </header>
 
@@ -100,6 +101,28 @@
               <label>الكلية / الجامعة <span class="req">*</span></label>
               <input type="text" id="college" placeholder="مثال: جامعة السلطان قابوس" autocomplete="off">
               <div class="error-msg">هذا الحقل مطلوب</div>
+            </div>
+
+            <!-- حقل الجنس: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب -->
+            <div class="field" data-field="gender">
+              <label>الجنس <span class="req">*</span></label>
+              <select id="gender">
+                <option value="">اختر</option>
+                <option value="ذكر">ذكر</option>
+                <option value="انثى">انثى</option>
+              </select>
+              <div class="error-msg">يرجى اختيار الجنس</div>
+            </div>
+
+            <!-- حقل نوع التدريب: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب -->
+            <div class="field" data-field="training_type">
+              <label>نوع التدريب <span class="req">*</span></label>
+              <select id="training_type">
+                <option value="">اختر</option>
+                <option value="تدريب إلزامي">تدريب إلزامي</option>
+                <option value="تدريب تطوعي">تدريب تطوعي</option>
+              </select>
+              <div class="error-msg">يرجى اختيار نوع التدريب</div>
             </div>
 
             <!-- ==========================================================
