@@ -41,6 +41,41 @@ const EVAL_RATING_OPTIONS = [
   { value: "D", labelAr: "مقبول",     labelEn: "Acceptable" },
 ];
 
+// أقصى عدد أحرف مسموح بها في «القسم ج: ملاحظات عامة» — يمنع المستخدم من
+// كتابة نص طويل جداً قد يتجاوز مساحة القسم المخصصة له داخل صفحة الطباعة
+// (A4). هذا الحد يُطبَّق مباشرة على حقل الإدخال (maxlength) فيمنع المشكلة
+// من الأساس، بالإضافة إلى تصغير حجم الخط تلقائياً كلما اقترب النص من هذا
+// الحد (راجع evalCommentsFontSize أدناه) كطبقة حماية إضافية.
+const EVAL_COMMENTS_MAX_LENGTH = 600;
+
+/**
+ * حساب حجم خط مناسب (بالبكسل) لصندوق «ملاحظات عامة» عند الطباعة، بحيث يصغر
+ * تدريجياً كلما طال النص — لضمان بقاء كامل القسم ج (والتوقيع بعده) داخل
+ * حدود صفحة A4 الفعلية ولا يتجاوزها، دون الحاجة لأي تمرير (scroll) أو قص
+ * للنص عند الطباعة الورقية.
+ * @param {string} text - نص الملاحظات العامة (قبل الترميز HTML)
+ * @returns {number} حجم الخط بالبكسل
+ */
+function evalCommentsFontSize(text){
+  const len = (text || "").length;
+  if (len <= 220) return 11;
+  if (len <= 350) return 10;
+  if (len <= 480) return 9;
+  return 8;
+}
+
+/**
+ * مزامنة نص عدّاد الأحرف تحت حقل الملاحظات مع القيمة الحالية للحقل — تُستخدم
+ * بعد أي تعبئة برمجية لقيمة الحقل (لا تُستدعى تلقائياً عند كتابة المستخدم،
+ * فتلك مربوطة بحدث input مباشرة في ensureEvaluationModal).
+ * @param {HTMLElement} overlay - عنصر نافذة التقييم
+ */
+function syncEvalCommentsCounter(overlay){
+  const commentsEl = overlay.querySelector(".ev-comments");
+  const counterEl = overlay.querySelector(".cc-count");
+  if (commentsEl && counterEl) counterEl.textContent = commentsEl.value.length;
+}
+
 // ---------------------------------------------------------------------------
 // إنشاء/إعادة استخدام نافذة نموذج التقييم
 // ---------------------------------------------------------------------------
@@ -98,7 +133,8 @@ function ensureEvaluationModal(){
 
       <div class="eval-section">
         <h5>C. ملاحظات عامة</h5>
-        <textarea class="ev-comments" rows="4" placeholder="اكتب ملاحظات عامة عن أداء المتدرب خلال فترة التدريب..."></textarea>
+        <textarea class="ev-comments" rows="4" maxlength="${EVAL_COMMENTS_MAX_LENGTH}" placeholder="اكتب ملاحظات عامة عن أداء المتدرب خلال فترة التدريب..."></textarea>
+        <div class="ev-comments-counter"><span class="cc-count">0</span> / ${EVAL_COMMENTS_MAX_LENGTH} حرف — هذا الحد يضمن ثبات النص داخل مساحته على ورقة A4 عند الطباعة</div>
         <div class="eval-grid" style="margin-top:12px">
           <div class="eval-field"><label>اسم المشرف المباشر</label><input class="ev-supervisor" placeholder="مثال: إبراهيم السيناوي"></div>
           <div class="eval-field"><label>التاريخ</label><input type="date" class="ev-date"></div>
@@ -113,6 +149,18 @@ function ensureEvaluationModal(){
       </div>
     </div>`;
   document.body.appendChild(overlay);
+
+  // تحديث عدّاد الأحرف تحت حقل الملاحظات مباشرة أثناء الكتابة (يُضاف مرة
+  // واحدة فقط هنا لأن ensureEvaluationModal لا يعيد إنشاء النافذة إن كانت
+  // موجودة أصلاً — راجع أعلى الدالة).
+  const commentsEl = overlay.querySelector(".ev-comments");
+  const counterEl = overlay.querySelector(".cc-count");
+  if (commentsEl && counterEl){
+    commentsEl.addEventListener("input", () => {
+      counterEl.textContent = commentsEl.value.length;
+    });
+  }
+
   return overlay;
 }
 
@@ -159,6 +207,7 @@ async function showEvaluationModal(group){
   countryInput.value = "سلطنة عُمان";
   placeInput.value = "مستشفى إبراء";
   commentsInput.value = "";
+  syncEvalCommentsCounter(overlay);
   supervisorInput.value = "";
   dateInput.value = new Date().toISOString().slice(0, 10);
   overlay.querySelectorAll('input[type="radio"]').forEach(r => { r.checked = false; });
@@ -179,6 +228,7 @@ async function showEvaluationModal(group){
         countryInput.value = existing.country || "سلطنة عُمان";
         placeInput.value = existing.place_of_training || "مستشفى إبراء";
         commentsInput.value = existing.general_comments || "";
+        syncEvalCommentsCounter(overlay);
         supervisorInput.value = existing.supervisor_name || "";
         dateInput.value = existing.evaluation_date || new Date().toISOString().slice(0, 10);
         EVAL_RATING_ROWS.forEach(row => {
@@ -348,6 +398,10 @@ function buildEvaluationPrintHTML(data){
     line-height:1.55;
     direction: ltr;
     text-align: left;
+    /* حماية إضافية: مهما كان طول المحتوى، لا يمكن لأي جزء منه أن يتجاوز
+       حدود ورقة A4 الفعلية (وهي بالضبط top/left/right/bottom أعلاه) —
+       يمنع أي تسرّب للتوقيع أو الجدول خارج حواف الورقة عند الطباعة. */
+    overflow:hidden;
   }
   h3.sec-title{
     font-size:12.5px;
@@ -382,10 +436,16 @@ function buildEvaluationPrintHTML(data){
   .comments-box{
     border:1px solid #1B2A3A;
     min-height:60px;
+    max-height:70mm;
     padding:8px;
     margin-bottom:14px;
     white-space:pre-wrap;
+    overflow:hidden;
+    /* حجم الخط الافتراضي هنا (11px) يُطابق evalCommentsFontSize() لأقصر
+       نص؛ يُستبدل عملياً بحجم مُحسوب ديناميكياً عبر style مضمّن أسفل حسب
+       طول نص الملاحظات الفعلي — راجع buildEvaluationPrintHTML(). */
     font-size:11px;
+    line-height:1.5;
   }
 
   .sign-row{
@@ -469,7 +529,7 @@ function buildEvaluationPrintHTML(data){
     </table>
 
     <h3 class="sec-title">C. GENERAL COMMENTS</h3>
-    <div class="comments-box">${escapeHtml(data.general_comments)}</div>
+    <div class="comments-box" style="font-size:${evalCommentsFontSize(data.general_comments)}px">${escapeHtml((data.general_comments || "").slice(0, EVAL_COMMENTS_MAX_LENGTH))}</div>
 
     <div class="sign-row">
       <div class="sign-block">
