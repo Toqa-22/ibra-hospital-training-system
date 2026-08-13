@@ -844,6 +844,12 @@ select:focus-visible,
 }
 .eval-field input[readonly]{ background:#F1F4F8; color:#5B6B7C; }
 .eval-section textarea{ resize:vertical; }
+.ev-comments-counter{
+  margin-top:4px;
+  font-size:11px;
+  color:#8A97A6;
+  text-align:left;
+}
 
 .eval-rating-scroll{ overflow-x:auto; }
 .eval-rating-table{
