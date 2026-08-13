@@ -116,8 +116,8 @@ function showConfirm({ title = "تأكيد العملية", text = "", confirmLa
 // -------- نافذة تعديل بيانات متدرب (سجل واحد) --------
 /**
  * التأكد من وجود نافذة تعديل بيانات المتدرب في الصفحة، وإنشاؤها بكل حقولها
- * (الاسم، الهاتف، الكلية، التخصص، القسم، تاريخي البداية والنهاية) إن لم تكن
- * موجودة بعد. تُستدعى داخلياً من showEditStudentModal() فقط.
+ * (الاسم، الهاتف، الكلية، التخصص، الجنس، نوع التدريب، القسم، تاريخي البداية
+ * والنهاية) إن لم تكن موجودة بعد. تُستدعى داخلياً من showEditStudentModal() فقط.
  * @returns {HTMLElement} عنصر الطبقة الخلفية (overlay) لنافذة التعديل
  */
 function ensureEditModal(){
@@ -144,6 +144,22 @@ function ensureEditModal(){
           <div class="e-field">
             <label>التخصص</label>
             <input type="text" class="e-spec">
+          </div>
+          <div class="e-field">
+            <label>الجنس</label>
+            <select class="e-gender">
+              <option value="">اختر</option>
+              <option value="ذكر">ذكر</option>
+              <option value="انثى">انثى</option>
+            </select>
+          </div>
+          <div class="e-field">
+            <label>نوع التدريب</label>
+            <select class="e-training-type">
+              <option value="">اختر</option>
+              <option value="تدريب إلزامي">تدريب إلزامي</option>
+              <option value="تدريب تطوعي">تدريب تطوعي</option>
+            </select>
           </div>
           <div class="e-field full">
             <label>القسم</label>
@@ -191,6 +207,8 @@ function showEditStudentModal(record, options = {}){
     const phoneInput = overlay.querySelector(".e-phone");
     const collegeInput = overlay.querySelector(".e-college");
     const specInput = overlay.querySelector(".e-spec");
+    const genderSelect = overlay.querySelector(".e-gender");
+    const trainingTypeSelect = overlay.querySelector(".e-training-type");
     const deptSelect = overlay.querySelector(".e-dept");
     const startInput = overlay.querySelector(".e-start");
     const endInput = overlay.querySelector(".e-end");
@@ -201,6 +219,8 @@ function showEditStudentModal(record, options = {}){
     phoneInput.value = record.phone || "";
     collegeInput.value = record.college || "";
     specInput.value = record.specialization || "";
+    genderSelect.value = record.gender || "";
+    trainingTypeSelect.value = record.training_type || "";
     deptSelect.innerHTML = DEPARTMENTS.map(d => `<option value="${escapeHtml(d)}" ${d === record.department ? "selected" : ""}>${escapeHtml(d)}</option>`).join("");
     startInput.value = record.training_start || "";
     endInput.value = record.training_end || "";
@@ -225,11 +245,13 @@ function showEditStudentModal(record, options = {}){
       const phone = phoneInput.value.trim();
       const college = collegeInput.value.trim();
       const specialization = specInput.value.trim();
+      const gender = genderSelect.value;
+      const training_type = trainingTypeSelect.value;
       const department = deptSelect.value;
       const training_start = startInput.value;
       const training_end = endInput.value;
 
-      if (!student_name || !phone || !specialization || !department || !training_start || !training_end){
+      if (!student_name || !phone || !specialization || !gender || !training_type || !department || !training_start || !training_end){
         errorEl.textContent = "يرجى تعبئة جميع الحقول المطلوبة";
         errorEl.classList.add("show");
         return;
@@ -245,7 +267,7 @@ function showEditStudentModal(record, options = {}){
         return;
       }
 
-      cleanup({ student_name, phone, college, specialization, department, training_start, training_end });
+      cleanup({ student_name, phone, college, specialization, gender, training_type, department, training_start, training_end });
     };
 
     cancelBtn.addEventListener("click", onCancel);
