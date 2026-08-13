@@ -54,6 +54,7 @@
       <a href="index.html">تسجيل متدرب</a>
       <a href="waiting.html">⏳ قائمة الانتظار</a>
       <a href="dashboard.html" class="active">لوحة الإدارة</a>
+      <a href="reports.html">تقارير</a>
     </nav>
   </header>
 
@@ -83,30 +84,6 @@
       <div class="skeleton-card"></div>
       <div class="skeleton-card"></div>
       <div class="skeleton-card"></div>
-    </div>
-
-    <!-- ==========================================================================
-         لوحة طباعة تقرير PDF لفترة محددة — مستقلة تماماً عن لوحة البحث
-         بالأسفل: تفلتر state.allStudents مباشرة (وليس السجلات المفلترة حالياً
-         بالبحث) بحسب تاريخ بداية التدريب فقط، ثم تفتح تقريراً عاماً بتنسيق
-         A4 أفقي عبر openBulkStudentsReport() (معرّفة في js/report.js).
-         ========================================================================== -->
-    <div class="period-report-panel">
-      <h3>🖨️ طباعة تقرير لفترة محددة</h3>
-      <p class="filters-hint">اختر فترة زمنية لطباعة تقرير PDF بجميع المتدربين الذين تبدأ فترة تدريبهم ضمنها — بشكل مستقل عن فلاتر البحث بالأسفل.</p>
-      <div class="period-report-fields">
-        <div class="f-field">
-          <label>من تاريخ</label>
-          <input type="date" id="limitFrom">
-        </div>
-        <div class="f-field">
-          <label>إلى تاريخ</label>
-          <input type="date" id="limitTo">
-        </div>
-        <button class="btn-export" id="printLimitBtn">
-          <span>🖨️</span> طباعة التقرير
-        </button>
-      </div>
     </div>
 
     <!-- ==========================================================================
