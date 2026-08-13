@@ -331,6 +331,8 @@ function validateForm(){
   const phone = document.getElementById("phone").value.trim();
   const specialization = document.getElementById("specialization").value.trim();
   const college = document.getElementById("college").value.trim();
+  const gender = document.getElementById("gender").value;
+  const trainingType = document.getElementById("training_type").value;
   const departments = Array.from(deptPickerState.selected);
 
   [
@@ -338,6 +340,8 @@ function validateForm(){
     ["phone", phone.length >= 6 && /^[0-9]+$/.test(phone)],
     ["specialization", specialization.length > 0],
     ["college", college.length > 0], // الكلية/الجامعة أصبحت حقلاً إلزامياً
+    ["gender", gender.length > 0],
+    ["training_type", trainingType.length > 0],
     ["department", departments.length > 0],
   ].forEach(([field, ok]) => {
     if (ok) clearFieldError(field); else { setFieldError(field); valid = false; }
@@ -367,7 +371,7 @@ function validateForm(){
     return { department: dep, start: d.start, end: d.end, waitlist: false };
   });
 
-  return { name, phone, specialization, college, items };
+  return { name, phone, specialization, college, gender, trainingType, items };
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +414,8 @@ function initFormSubmit(){
         phone: values.phone,
         specialization: values.specialization,
         college: values.college,
+        gender: values.gender,
+        training_type: values.trainingType,
       };
 
       // تقسيم الأقسام المختارة إلى مجموعتين: أقسام بفترة محددة (تُدرج مباشرة
