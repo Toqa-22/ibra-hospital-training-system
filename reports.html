@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  reports.html — صفحة التقارير
+  ============================================================================
+  الغرض: صفحة مستقلة تضم ثلاثة تقارير قابلة للطباعة (PDF عبر خاصية الطباعة في
+  المتصفح، بنفس آلية printReportHTML() المستخدمة في js/report.js):
+    1) تقرير عدد المتدربين بأقسام المستشفى
+    2) تقرير عدد المتدربين بالجامعات والكليات
+    3) تقرير تفصيلي للمتدربين (بحسب القسم: العدد، الذكور، الإناث،
+       الإلزامي، التطوعي)
+
+  لوحة "اختيار الفترة" أعلى الصفحة مشتركة بين التقارير الثلاثة: تُطبَّق على
+  تاريخ بداية التدريب فقط (نفس منطق اللوحة التي كانت سابقاً في dashboard.html)،
+  وتُترك فارغة لتشمل كل الفترات افتراضياً.
+
+  البيانات تُجلب مرة واحدة عند تحميل الصفحة عبر fetchAllStudents() (يستبعد
+  سجلات قائمة الانتظار تلقائياً لأنها بلا فترة تدريب محددة بعد)، وتُخزَّن في
+  الذاكرة؛ كل تبديل للفترة يُعيد الفلترة محلياً دون أي طلب إضافي للخادم.
+
+  التبعيات (بترتيب التحميل الإلزامي في أسفل الصفحة):
+    1) عميل Supabase JS من CDN
+    2) js/config.js       — بيانات الاتصال بمشروع Supabase
+    3) js/ui.js            — عناصر واجهة مشتركة (Toast...)
+    4) js/supabase.js      — يوفر fetchAllStudents() وescapeHtml()
+    5) js/report.js        — يوفر printReportHTML() وLOGO_IMAGE_DATA_URI
+                              وMINISTRY_NAME/HOSPITAL_NAME/HOSPITAL_SUBTITLE
+    6) js/reports.js        — منطق هذه الصفحة تحديداً (يُشغَّل عند DOMContentLoaded)
+
+  راجع أيضاً: dashboard.html (لوحة الإدارة)، css/style.css (الأنماط المشتركة)،
+  css/reports.css (أنماط خاصة بهذه الصفحة فقط).
+  ============================================================================
+-->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>التقارير | قسم التطوير والتوجيه المهني</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/dashboard.css">
+<link rel="stylesheet" href="css/reports.css">
+</head>
+<body>
+
+  <!-- الشريط العلوي: نفس بنية باقي الصفحات تماماً، فقط الرابط النشط هنا مختلف -->
+  <header class="app-topbar">
+    <div class="brand">
+      <img class="brand-mark" src="assets/logo.png" alt="شعار المستشفى" onerror="handleLogoImgError(this)">
+      <div class="brand-text">
+        <h1>وزارة الصحة - مستشفى إبراء - قسم التطوير والتوجيه المهني</h1>
+        <span>نظام تسجيل وإدارة المتدربين</span>
+      </div>
+    </div>
+    <nav class="topbar-nav">
+      <a href="index.html">تسجيل متدرب</a>
+      <a href="waiting.html">⏳ قائمة الانتظار</a>
+      <a href="dashboard.html">لوحة الإدارة</a>
+      <a href="reports.html" class="active">تقارير</a>
+    </nav>
+  </header>
+
+  <main class="dash-wrap reports-wrap">
+
+    <div class="dash-head">
+      <div>
+        <h2>التقارير</h2>
+        <p>اختر الفترة المطلوبة ثم اطبع أياً من التقارير الثلاثة أدناه</p>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         لوحة اختيار الفترة: مشتركة بين التقارير الثلاثة، تُطبَّق على تاريخ بداية
+         التدريب فقط. تُترك الحقول فارغة لتشمل كل الفترات (لا فلترة إطلاقاً).
+         ========================================================================== -->
+    <div class="period-report-panel">
+      <h3>📅 اختيار الفترة</h3>
+      <p class="filters-hint">تُطبَّق هذه الفترة على التقارير الثلاثة أدناه معاً حسب تاريخ بداية تدريب كل متدرب. اتركها فارغة لعرض كل الفترات.</p>
+      <div class="period-report-fields">
+        <div class="f-field">
+          <label>من تاريخ</label>
+          <input type="date" id="repFrom">
+        </div>
+        <div class="f-field">
+          <label>إلى تاريخ</label>
+          <input type="date" id="repTo">
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         بطاقات التقارير الثلاثة — تُبنى محتوياتها (buildDepartmentsReportHTML/
+         buildCollegesReportHTML/buildDetailedReportHTML) وتُطبع مباشرة عبر
+         printReportHTML() في js/reports.js عند الضغط على كل زر.
+         ========================================================================== -->
+    <div class="reports-grid">
+
+      <div class="report-card">
+        <div class="report-card-icon">🏥</div>
+        <h3>تقرير عدد المتدربين بأقسام المستشفى</h3>
+        <p>عدد المتدربين في كل قسم من أقسام المستشفى ضمن الفترة المختارة، مع الإجمالي الكلي.</p>
+        <button class="btn-export" id="printDeptsReportBtn">
+          <span>🖨️</span> طباعة التقرير
+        </button>
+      </div>
+
+      <div class="report-card">
+        <div class="report-card-icon">🎓</div>
+        <h3>تقرير عدد المتدربين بالجامعات والكليات</h3>
+        <p>عدد المتدربين حسب الجامعة أو الكلية التي ينتمون إليها ضمن الفترة المختارة، مع الإجمالي الكلي.</p>
+        <button class="btn-export" id="printCollegesReportBtn">
+          <span>🖨️</span> طباعة التقرير
+        </button>
+      </div>
+
+      <div class="report-card">
+        <div class="report-card-icon">📋</div>
+        <h3>تقرير تفصيلي للمتدربين</h3>
+        <p>تفصيل كامل لكل قسم: عدد المتدربين، الذكور والإناث، والتدريب الإلزامي والتطوعي، مع الإجمالي الكلي.</p>
+        <button class="btn-export" id="printDetailedReportBtn">
+          <span>🖨️</span> طباعة التقرير
+        </button>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ==========================================================================
+       ترتيب تحميل السكربتات مهم جداً: كل ملف يعتمد على ما قبله مباشرة.
+       ========================================================================== -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/reports.js"></script>
+</body>
+</html>
