@@ -2,8 +2,7 @@
 // dashboard.js
 // منطق لوحة إدارة المتدربين (dashboard.html) بالكامل: بطاقات الأقسام، شريط
 // تصفية الفئات، لوحة الفلاتر التسعة، الجدول القابل للفرز/التوسيع/الترقيم،
-// أزرار التعديل والحذف والتقرير والتقييم لكل سجل، ولوحة طباعة تقرير الفترة
-// المستقلة.
+// أزرار التعديل والحذف والتقرير والتقييم لكل سجل.
 //
 // الاعتماديات المطلوب تحميلها قبل هذا الملف (بنفس الترتيب في dashboard.html):
 //   1) js/config.js       — بيانات الاتصال بـ Supabase
@@ -235,37 +234,6 @@ function bindStaticEvents(){
     });
   });
 
-  document.getElementById("printLimitBtn").addEventListener("click", () => {
-    const from = document.getElementById("limitFrom").value;
-    const to = document.getElementById("limitTo").value;
-
-    if (!from && !to){
-      showToast("يرجى تحديد الفترة (من / إلى) أولاً", "warning");
-      return;
-    }
-    if (from && to && to < from){
-      showToast("تاريخ (إلى) لا يمكن أن يسبق تاريخ (من)", "error");
-      return;
-    }
-
-    const matched = state.allStudents.filter(s => {
-      if (from && s.training_start < from) return false;
-      if (to && s.training_start > to) return false;
-      return true;
-    });
-
-    if (matched.length === 0){
-      showToast("لا يوجد متدربون تبدأ فترتهم ضمن هذا النطاق", "warning");
-      return;
-    }
-
-    try {
-      openBulkStudentsReport(matched, { periodFrom: from, periodTo: to });
-    } catch (err){
-      console.error("فشل فتح التقرير العام:", err);
-      showToast("تعذر فتح التقرير، يرجى المحاولة مرة أخرى", "error");
-    }
-  });
 }
 
 // ---------------------------------------------------------------------------
