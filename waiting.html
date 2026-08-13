@@ -3,7 +3,7 @@
   ============================================================================
   waiting.html — قائمة الانتظار
   ============================================================================
-  الغرض: عرض المتدربين الذين أُضيفوا لقسم معيّن من صفحة التسجيل (index.html)
+  الغرض: عرض المتدربين الذين أُضيفوا لقسم معيّن من صفحة التسجيل (register.html)
   دون تحديد فترة تدريب فورية (خيار «إضافة إلى قائمة الانتظار» في كل صف قسم
   بنموذج التسجيل). كل سجل هنا هو is_waitlist = true في جدول students —
   بلا training_start/training_end بعد.
@@ -17,7 +17,7 @@
   التبعيات (بترتيب التحميل الإلزامي في أسفل الصفحة): نفس تبعيات dashboard.html
   تماماً عدا js/report.js (غير مطلوب هنا) واستبدال js/dashboard.js بـ js/waiting.js.
 
-  راجع أيضاً: index.html (صفحة التسجيل، مصدر سجلات هذه القائمة)،
+  راجع أيضاً: register.html (صفحة التسجيل، مصدر سجلات هذه القائمة)،
   dashboard.html (وجهة السجلات بعد تحديد فترتها)، css/dashboard.css (تُعاد
   الاستفادة من أنماط الجدول والفلاتر والحالة منها هنا لعدم تكرار الأنماط).
   ============================================================================
@@ -28,16 +28,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>قائمة الانتظار | قسم التطوير والتوجيه المهني</title>
 
+<!-- ==========================================================================
+     حارس الدخول: يُنفَّذ فوراً كأول شيء في الصفحة (قبل أي CSS أو سكربت خارجي
+     آخر) لمنع أي وميض لمحتوى محمي قبل التحقق. يفحص الجلسة المحلية المحفوظة
+     في localStorage بعد تسجيل الدخول (راجع js/auth.js لمنطق الحفظ الكامل)،
+     ويُعيد التوجيه فوراً لصفحة index.html (صفحة تسجيل الدخول) إن كانت غير
+     موجودة أو منتهية الصلاحية. مكرَّر بنفس الشكل تحديداً في أعلى
+     register.html وdashboard.html وreports.html.
+     ========================================================================== -->
+<script>
+(function(){
+  var AUTH_KEY = "ibra_admin_session";
+  var MAX_HOURS = 12;
+  try {
+    var raw = localStorage.getItem(AUTH_KEY);
+    var session = raw ? JSON.parse(raw) : null;
+    var valid = !!(session && session.username && session.loginAt &&
+      ((Date.now() - session.loginAt) / 3600000 <= MAX_HOURS));
+    if (!valid){
+      localStorage.removeItem(AUTH_KEY);
+      location.replace("index.html?redirect=" + encodeURIComponent(location.pathname.split("/").pop() || "waiting.html"));
+    }
+  } catch (e){
+    location.replace("index.html");
+  }
+})();
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/dashboard.css">
+<link rel="stylesheet" href="css/auth.css">
 </head>
 <body>
 
-  <!-- الشريط العلوي: نفس بنية index.html وdashboard.html تماماً -->
+  <!-- الشريط العلوي: نفس بنية register.html وdashboard.html تماماً -->
   <header class="app-topbar">
     <div class="brand">
       <img class="brand-mark" src="assets/logo.png" alt="شعار المستشفى" onerror="handleLogoImgError(this)">
@@ -47,10 +75,11 @@
       </div>
     </div>
     <nav class="topbar-nav">
-      <a href="index.html">تسجيل متدرب</a>
+      <a href="register.html">تسجيل متدرب</a>
       <a href="waiting.html" class="active">⏳ قائمة الانتظار</a>
       <a href="dashboard.html">لوحة الإدارة</a>
       <a href="reports.html">تقارير</a>
+      <a href="#" class="logout-link" id="logoutLink">🚪 تسجيل الخروج</a>
     </nav>
   </header>
 
@@ -126,6 +155,7 @@
   <script src="js/departments.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/waiting.js"></script>
 </body>
 </html>
