@@ -48,6 +48,28 @@ const EVAL_RATING_OPTIONS = [
 // الحد (راجع evalCommentsFontSize أدناه) كطبقة حماية إضافية.
 const EVAL_COMMENTS_MAX_LENGTH = 600;
 
+// أقصى عدد أسطر (فواصل أسطر Enter) مسموح بها في نفس الحقل — طبقة حماية
+// إضافية مستقلة عن حد الأحرف: تمنع المستخدم من إدراج عدد كبير من الأسطر
+// القصيرة (كل سطر بضغطة Enter) حتى لو بقي إجمالي عدد الأحرف تحت الحد
+// الأقصى، لأن الأسطر الكثيرة تكسر تنسيق صندوق الملاحظات عند الطباعة أكثر
+// من طول النص نفسه. راجع enforceEvalCommentsMaxLines() أدناه للتطبيق الفعلي.
+const EVAL_COMMENTS_MAX_LINES = 4;
+
+/**
+ * تقييد نص «ملاحظات عامة» إلى EVAL_COMMENTS_MAX_LINES سطراً كحد أقصى، بقطع
+ * أي أسطر زائدة عن هذا الحد (وليس قطع النص بالكامل — الأسطر الأربعة
+ * الأولى تبقى كما هي كاملة). تُستخدم عند كتابة المستخدم مباشرة (حدث input)
+ * وأيضاً عند التعبئة البرمجية من تقييم محفوظ سابقاً قد يحتوي أسطراً أكثر
+ * (تقييمات محفوظة قبل إضافة هذا الحد).
+ * @param {string} value - النص الحالي لحقل الملاحظات
+ * @returns {string} نفس النص إن كان ضمن الحد، أو أول أربعة أسطر منه فقط
+ */
+function enforceEvalCommentsMaxLines(value){
+  const lines = (value || "").split("\n");
+  if (lines.length <= EVAL_COMMENTS_MAX_LINES) return value || "";
+  return lines.slice(0, EVAL_COMMENTS_MAX_LINES).join("\n");
+}
+
 /**
  * حساب حجم خط مناسب (بالبكسل) لصندوق «ملاحظات عامة» عند الطباعة، بحيث يصغر
  * تدريجياً كلما طال النص — لضمان بقاء كامل القسم ج (والتوقيع بعده) داخل
@@ -134,7 +156,7 @@ function ensureEvaluationModal(){
       <div class="eval-section">
         <h5>C. ملاحظات عامة</h5>
         <textarea class="ev-comments" rows="4" maxlength="${EVAL_COMMENTS_MAX_LENGTH}" placeholder="اكتب ملاحظات عامة عن أداء المتدرب خلال فترة التدريب..."></textarea>
-        <div class="ev-comments-counter"><span class="cc-count">0</span> / ${EVAL_COMMENTS_MAX_LENGTH} حرف — هذا الحد يضمن ثبات النص داخل مساحته على ورقة A4 عند الطباعة</div>
+        <div class="ev-comments-counter"><span class="cc-count">0</span> / ${EVAL_COMMENTS_MAX_LENGTH} حرف — بحد أقصى ${EVAL_COMMENTS_MAX_LINES} أسطر، لضمان ثبات النص داخل مساحته على ورقة A4 عند الطباعة</div>
         <div class="eval-grid" style="margin-top:12px">
           <div class="eval-field"><label>اسم المشرف المباشر</label><input class="ev-supervisor" placeholder="مثال: إبراهيم السيناوي"></div>
           <div class="eval-field"><label>التاريخ</label><input type="date" class="ev-date"></div>
@@ -157,6 +179,10 @@ function ensureEvaluationModal(){
   const counterEl = overlay.querySelector(".cc-count");
   if (commentsEl && counterEl){
     commentsEl.addEventListener("input", () => {
+      const limited = enforceEvalCommentsMaxLines(commentsEl.value);
+      if (limited !== commentsEl.value){
+        commentsEl.value = limited;
+      }
       counterEl.textContent = commentsEl.value.length;
     });
   }
@@ -227,7 +253,7 @@ async function showEvaluationModal(group){
         yearInput.value = existing.year_of_study || "";
         countryInput.value = existing.country || "سلطنة عُمان";
         placeInput.value = existing.place_of_training || "مستشفى إبراء";
-        commentsInput.value = existing.general_comments || "";
+        commentsInput.value = enforceEvalCommentsMaxLines(existing.general_comments || "");
         syncEvalCommentsCounter(overlay);
         supervisorInput.value = existing.supervisor_name || "";
         dateInput.value = existing.evaluation_date || new Date().toISOString().slice(0, 10);
