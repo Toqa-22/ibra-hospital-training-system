@@ -110,7 +110,7 @@ async function insertStudentsForDepartments(base, departments){
  * البيانات لكل قسم مختار، بنفس بيانات الطالب المشتركة (الاسم، الهاتف،
  * التخصص، الكلية)، لكن بفترة تدريب (بداية/نهاية) خاصة بكل قسم على حدة،
  * وبنفس تاريخ التسجيل (اليوم) لكل السجلات المُنشأة معاً في هذا الطلب.
- * @param {{student_name, phone, specialization, college}} base - بيانات الطالب المشتركة بين كل السجلات
+ * @param {{student_name, phone, specialization, college, gender, training_type}} base - بيانات الطالب المشتركة بين كل السجلات
  * @param {Array<{department, start, end}>} items - قائمة الأقسام المختارة وفترة كل واحد منها
  * @returns {Array} السجلات التي أنشأتها Supabase فعلياً (مع id لكل سجل)
  */
@@ -122,6 +122,8 @@ async function insertStudentsWithPeriods(base, items){
     phone: String(base.phone).trim(),
     specialization: base.specialization.trim(),
     college: (base.college || "").trim() || null,
+    gender: (base.gender || "").trim() || null,
+    training_type: (base.training_type || "").trim() || null,
     department: item.department.trim(),
     training_start: item.start,
     training_end: item.end,
@@ -157,6 +159,8 @@ async function insertWaitlistStudents(base, departments){
     phone: String(base.phone).trim(),
     specialization: base.specialization.trim(),
     college: (base.college || "").trim() || null,
+    gender: (base.gender || "").trim() || null,
+    training_type: (base.training_type || "").trim() || null,
     department: dep.trim(),
     training_start: null,
     training_end: null,
