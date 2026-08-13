@@ -119,10 +119,10 @@ function ensureEvaluationModal(){
       <div class="eval-section">
         <h5>A. البيانات الشخصية</h5>
         <div class="eval-grid">
-          <div class="eval-field"><label>اسم الطالب</label><input class="ev-name" readonly></div>
-          <div class="eval-field"><label>التخصص</label><input class="ev-specialty" readonly></div>
-          <div class="eval-field"><label>الجامعة / الكلية</label><input class="ev-university" readonly></div>
-          <div class="eval-field"><label>فترة التدريب</label><input class="ev-period" readonly></div>
+          <div class="eval-field"><label>اسم الطالب</label><input class="ev-name"></div>
+          <div class="eval-field"><label>التخصص</label><input class="ev-specialty"></div>
+          <div class="eval-field"><label>الجامعة / الكلية</label><input class="ev-university"></div>
+          <div class="eval-field"><label>فترة التدريب</label><input class="ev-period"></div>
           <div class="eval-field"><label>السنة الدراسية</label><input class="ev-year" placeholder="مثال: السنة الثانية"></div>
           <div class="eval-field"><label>الدولة</label><input class="ev-country"></div>
           <div class="eval-field full"><label>مكان التدريب</label><input class="ev-place"></div>
@@ -217,7 +217,10 @@ async function showEvaluationModal(group){
   const dateInput = overlay.querySelector(".ev-date");
   const errorEl = overlay.querySelector(".e-error");
 
-  // القسم أ: تعبئة تلقائية من سجل الطالب (لا تُعدَّل يدوياً — حقول readonly)
+  // القسم أ: تُعبَّأ تلقائياً من سجل الطالب كقيم افتراضية عند فتح النافذة،
+  // لكنها تبقى حقولاً نصية قابلة للتعديل يدوياً (مثلاً لتصحيح تخصص أو تحديث
+  // اسم الجامعة قبل الطباعة) دون أن يُغيّر ذلك سجل الطالب الأصلي في جدول
+  // students — القيم المعدَّلة هنا تُحفظ فقط ضمن سجل التقييم نفسه.
   // ملاحظة: group هنا من groupDuplicateStudents() في dashboard.js، وشكله
   // {student_name, phone, records[]} فقط — التخصص والجامعة والفترة تُقرأ من
   // أول سجل (primary) وليس من الكائن group نفسه مباشرة.
