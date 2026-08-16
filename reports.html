@@ -3,14 +3,17 @@
   ============================================================================
   reports.html — صفحة التقارير
   ============================================================================
-  الغرض: صفحة مستقلة تضم ثلاثة تقارير قابلة للطباعة (PDF عبر خاصية الطباعة في
+  الغرض: صفحة مستقلة تضم أربعة تقارير قابلة للطباعة (PDF عبر خاصية الطباعة في
   المتصفح، بنفس آلية printReportHTML() المستخدمة في js/report.js):
     1) تقرير عدد المتدربين بأقسام المستشفى
-    2) تقرير عدد المتدربين بالجامعات والكليات
-    3) تقرير تفصيلي للمتدربين (بحسب القسم: العدد، الذكور، الإناث،
+    2) تقرير عدد المتدربين بفئات المستشفى (الفئات الرئيسية الأربع في
+       js/departments.js: الفئات الطبية، الفئات الطبية المساعدة، الأقسام
+       الإدارية، أقسام الهندسة والصيانة)
+    3) تقرير عدد المتدربين بالجامعات والكليات
+    4) تقرير تفصيلي للمتدربين (بحسب القسم: العدد، الذكور، الإناث،
        الإلزامي، التطوعي)
 
-  لوحة "اختيار الفترة" أعلى الصفحة مشتركة بين التقارير الثلاثة: تُطبَّق على
+  لوحة "اختيار الفترة" أعلى الصفحة مشتركة بين التقارير الأربعة: تُطبَّق على
   تاريخ بداية التدريب فقط (نفس منطق اللوحة التي كانت سابقاً في dashboard.html)،
   وتُترك فارغة لتشمل كل الفترات افتراضياً.
 
@@ -21,12 +24,13 @@
   التبعيات (بترتيب التحميل الإلزامي في أسفل الصفحة):
     1) عميل Supabase JS من CDN
     2) js/config.js       — بيانات الاتصال بمشروع Supabase
-    3) js/ui.js            — عناصر واجهة مشتركة (Toast...)
-    4) js/supabase.js      — يوفر fetchAllStudents() وescapeHtml()
-    5) js/auth.js           — تسجيل الخروج (الحارس الفعلي سكربت inline أسفل)
-    6) js/report.js        — يوفر printReportHTML() وLOGO_IMAGE_DATA_URI
+    3) js/departments.js  — يوفر CATEGORIES وfindCategoryForDepartment() (لتقرير الفئات)
+    4) js/ui.js            — عناصر واجهة مشتركة (Toast...)
+    5) js/supabase.js      — يوفر fetchAllStudents() وescapeHtml()
+    6) js/auth.js           — تسجيل الخروج (الحارس الفعلي سكربت inline أسفل)
+    7) js/report.js        — يوفر printReportHTML() وLOGO_IMAGE_DATA_URI
                               وMINISTRY_NAME/HOSPITAL_NAME/HOSPITAL_SUBTITLE
-    7) js/reports.js        — منطق هذه الصفحة تحديداً (يُشغَّل عند DOMContentLoaded)
+    8) js/reports.js        — منطق هذه الصفحة تحديداً (يُشغَّل عند DOMContentLoaded)
 
   راجع أيضاً: dashboard.html (لوحة الإدارة)، css/style.css (الأنماط المشتركة)،
   css/reports.css (أنماط خاصة بهذه الصفحة فقط).
@@ -99,7 +103,7 @@
     <div class="dash-head">
       <div>
         <h2>التقارير</h2>
-        <p>اختر الفترة المطلوبة ثم اطبع أياً من التقارير الثلاثة أدناه</p>
+        <p>اختر الفترة المطلوبة ثم اطبع أياً من التقارير الأربعة أدناه</p>
       </div>
     </div>
 
@@ -123,9 +127,9 @@
     </div>
 
     <!-- ==========================================================================
-         بطاقات التقارير الثلاثة — تُبنى محتوياتها (buildDepartmentsReportHTML/
-         buildCollegesReportHTML/buildDetailedReportHTML) وتُطبع مباشرة عبر
-         printReportHTML() في js/reports.js عند الضغط على كل زر.
+         بطاقات التقارير الأربعة — تُبنى محتوياتها (buildDepartmentsReportHTML/
+         buildCategoriesReportHTML/buildCollegesReportHTML/buildDetailedReportHTML)
+         وتُطبع مباشرة عبر printReportHTML() في js/reports.js عند الضغط على كل زر.
          ========================================================================== -->
     <div class="reports-grid">
 
@@ -134,6 +138,15 @@
         <h3>تقرير عدد المتدربين بأقسام المستشفى</h3>
         <p>عدد المتدربين في كل قسم من أقسام المستشفى ضمن الفترة المختارة، مع الإجمالي الكلي.</p>
         <button class="btn-export" id="printDeptsReportBtn">
+          <span>🖨️</span> طباعة التقرير
+        </button>
+      </div>
+
+      <div class="report-card">
+        <div class="report-card-icon">🗂️</div>
+        <h3>تقرير عدد المتدربين بفئات المستشفى</h3>
+        <p>عدد المتدربين حسب الفئة الرئيسية (الفئات الطبية، الفئات الطبية المساعدة، الأقسام الإدارية، أقسام الهندسة والصيانة) ضمن الفترة المختارة، مع الإجمالي الكلي.</p>
+        <button class="btn-export" id="printCategoriesReportBtn">
           <span>🖨️</span> طباعة التقرير
         </button>
       </div>
@@ -165,6 +178,7 @@
        ========================================================================== -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/departments.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/supabase.js"></script>
   <script src="js/auth.js"></script>
