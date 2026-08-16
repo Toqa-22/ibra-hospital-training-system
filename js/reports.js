@@ -3,15 +3,16 @@
 // منطق صفحة التقارير (reports.html) بالكامل: جلب بيانات المتدربين (بلا فترة
 // تدريب محددة مستبعدة تلقائياً عبر fetchAllStudents())، فلترة محلية حسب
 // الفترة المشتركة (تاريخ بداية التدريب)، ثم بناء وطباعة كل تقرير من التقارير
-// الثلاثة عبر printReportHTML() (المعرَّفة في js/report.js — نفس آلية طباعة
+// الأربعة عبر printReportHTML() (المعرَّفة في js/report.js — نفس آلية طباعة
 // لوحة الإدارة وتقرير كل متدرب، بلا نافذة منفصلة).
 //
 // الاعتماديات المطلوب تحميلها قبل هذا الملف (بنفس الترتيب في reports.html):
-//   1) js/config.js   — بيانات الاتصال بـ Supabase
-//   2) js/ui.js        — يوفر showToast
-//   3) js/supabase.js  — يوفر fetchAllStudents() وescapeHtml()
-//   4) js/report.js    — يوفر printReportHTML() وLOGO_IMAGE_DATA_URI
-//                         وHOSPITAL_NAME وHOSPITAL_SUBTITLE
+//   1) js/config.js       — بيانات الاتصال بـ Supabase
+//   2) js/departments.js  — يوفر CATEGORIES وfindCategoryForDepartment() (لتقرير الفئات)
+//   3) js/ui.js            — يوفر showToast
+//   4) js/supabase.js      — يوفر fetchAllStudents() وescapeHtml()
+//   5) js/report.js        — يوفر printReportHTML() وLOGO_IMAGE_DATA_URI
+//                             وHOSPITAL_NAME وHOSPITAL_SUBTITLE
 // ============================================================================
 
 const reportsState = {
@@ -61,11 +62,14 @@ function reportPeriodLabel(periodFrom, periodTo){
 }
 
 // ---------------------------------------------------------------------------
-// ربط أزرار التقارير الثلاثة
+// ربط أزرار التقارير الأربعة
 // ---------------------------------------------------------------------------
 function bindReportButtons(){
   document.getElementById("printDeptsReportBtn").addEventListener("click", () => {
     printDepartmentsReport();
+  });
+  document.getElementById("printCategoriesReportBtn").addEventListener("click", () => {
+    printCategoriesReport();
   });
   document.getElementById("printCollegesReportBtn").addEventListener("click", () => {
     printCollegesReport();
@@ -294,7 +298,78 @@ function printDepartmentsReport(){
 }
 
 // ---------------------------------------------------------------------------
-// التقرير الثاني: عدد المتدربين بالجامعات والكليات
+// التقرير الثاني: عدد المتدربين بفئات المستشفى
+// ---------------------------------------------------------------------------
+/**
+ * تُجمِّع قائمة متدربين حسب الفئة الرئيسية التي ينتمي إليها قسم كل متدرب
+ * (عبر findCategoryForDepartment() في js/departments.js، بحسب هيكل CATEGORIES
+ * الأربع: الفئات الطبية، الفئات الطبية المساعدة، الأقسام الإدارية، أقسام
+ * الهندسة والصيانة)، وتُرجع مصفوفة {label, count} مرتبة أبجدياً عربياً مع
+ * الإجمالي. أي قسم لا ينتمي لأي فئة معروفة (لا يُفترض حدوثه عادة) يُجمَّع
+ * تحت تسمية "غير محدد" بدل إسقاطه من التقرير.
+ * @param {Array} list - قائمة سجلات المتدربين
+ * @returns {{rows:Array<{label:string,count:number}>, total:number}}
+ */
+function groupCountByCategory(list){
+  const map = new Map();
+  list.forEach(s => {
+    const category = findCategoryForDepartment((s.department || "").trim());
+    const key = (category && category.name) || "غير محدد";
+    map.set(key, (map.get(key) || 0) + 1);
+  });
+  const rows = Array.from(map.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+  return { rows, total: list.length };
+}
+
+function printCategoriesReport(){
+  const { list, periodFrom, periodTo } = getFilteredReportStudents();
+  if (list.length === 0){
+    showToast("لا يوجد متدربون ضمن هذه الفترة", "warning");
+    return;
+  }
+
+  const { rows, total } = groupCountByCategory(list);
+  const bodyRows = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.label)}</td>
+      <td>${r.count}</td>
+    </tr>`).join("");
+
+  const tableHtml = `
+  <table>
+    <colgroup>
+      <col style="width:70%">
+      <col style="width:30%">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>الفئة</th>
+        <th>عدد المتدربين</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${bodyRows}
+      <tr class="total-row">
+        <td>الإجمالي</td>
+        <td>${total}</td>
+      </tr>
+    </tbody>
+  </table>`;
+
+  const html = buildReportPageHTML(
+    "تقرير عدد المتدربين بفئات المستشفى",
+    reportPeriodLabel(periodFrom, periodTo),
+    total,
+    tableHtml,
+    "portrait"
+  );
+  printReportHTML(html);
+}
+
+// ---------------------------------------------------------------------------
+// التقرير الثالث: عدد المتدربين بالجامعات والكليات
 // ---------------------------------------------------------------------------
 function printCollegesReport(){
   const { list, periodFrom, periodTo } = getFilteredReportStudents();
@@ -342,7 +417,7 @@ function printCollegesReport(){
 }
 
 // ---------------------------------------------------------------------------
-// التقرير الثالث: تقرير تفصيلي للمتدربين (حسب القسم)
+// التقرير الرابع: تقرير تفصيلي للمتدربين (حسب القسم)
 // ---------------------------------------------------------------------------
 /**
  * يُجمِّع قائمة متدربين حسب القسم مع تفصيل كل قسم إلى: عدد المتدربين، عدد
