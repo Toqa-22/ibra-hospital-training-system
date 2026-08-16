@@ -84,11 +84,16 @@ function bindReportButtons(){
 // ---------------------------------------------------------------------------
 /**
  * تُجمِّع قائمة متدربين حسب قيمة حقل معيّن (مثلاً department أو college)،
- * وتُرجع مصفوفة {label, count} مرتبة أبجدياً عربياً، بالإضافة إلى الإجمالي.
- * القيم الفارغة/الناقصة تُجمَّع تحت تسمية "غير محدد" بدل إسقاطها من التقرير.
+ * وتُرجع مصفوفة {label, count} مرتبة أبجدياً عربياً. count هنا هو عدد صفوف
+ * الالتحاق الفعلي بهذا القسم/الكلية تحديداً (وهو الصحيح لهذا السياق: صف
+ * واحد = التحاق فعلي واحد بذلك القسم)، وليس عدد الأفراد الفريدين — لحساب
+ * الإجمالي الكلي الصحيح (متدرب واحد يُحتسب مرة واحدة حتى لو التحق بأكثر من
+ * قسم) استخدم countUniqueStudents() على القائمة كاملة بدل الاعتماد على
+ * total المُرجَعة من هنا. القيم الفارغة/الناقصة تُجمَّع تحت تسمية "غير محدد"
+ * بدل إسقاطها من التقرير.
  * @param {Array} list - قائمة سجلات المتدربين
  * @param {string} field - اسم الحقل المطلوب التجميع بحسبه
- * @returns {{rows:Array<{label:string,count:number}>, total:number}}
+ * @returns {{rows:Array<{label:string,count:number}>}}
  */
 function groupCountByField(list, field){
   const map = new Map();
@@ -99,7 +104,37 @@ function groupCountByField(list, field){
   const rows = Array.from(map.entries())
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => a.label.localeCompare(b.label, "ar"));
-  return { rows, total: list.length };
+  return { rows };
+}
+
+/**
+ * مفتاح تمييز فريد لكل متدرب (شخص حقيقي واحد)، بحسب رقم الهاتف (حقل إلزامي
+ * وأكثر الحقول موثوقية لتمييز شخص عن آخر عند التسجيل)، مع رجوع احتياطي
+ * لاسم الطالب فقط في الحالة النادرة لسجل بلا رقم هاتف. تُستخدم داخلياً من
+ * countUniqueStudents() وcomputeUniqueDetailedTotals() فقط.
+ * @param {object} s - سجل متدرب واحد
+ * @returns {string} مفتاح فريد لهذا الشخص
+ */
+function studentUniqueKey(s){
+  const phone = (s.phone || "").trim();
+  return phone || `name:${(s.student_name || "").trim()}`;
+}
+
+/**
+ * عدّ عدد الأفراد الفريدين (لا عدد صفوف التسجيل) ضمن قائمة سجلات متدربين.
+ * كل متدرب مُلتحق بأكثر من قسم يُنشئ له سجلاً منفصلاً لكل قسم (راجع
+ * insertStudentsWithPeriods في js/supabase.js)، فعدّ الصفوف مباشرة (list.length)
+ * يُضاعِف عدد نفس الشخص بعدد الأقسام التي التحق بها. تُستخدم لحساب الإجمالي
+ * الكلي المعروض أعلى كل تقرير وفي صف "الإجمالي" في التقارير الثلاثة الأولى
+ * فقط (الأقسام/الفئات/الجامعات) — أما عدد المتدربين داخل كل قسم/فئة/كلية
+ * على حدة فيبقى عدد صفوف كما هو (كل صف = التحاق فعلي بذلك القسم تحديداً).
+ * @param {Array} list - قائمة سجلات المتدربين
+ * @returns {number} عدد الأفراد الفريدين
+ */
+function countUniqueStudents(list){
+  const keys = new Set();
+  list.forEach(s => keys.add(studentUniqueKey(s)));
+  return keys.size;
 }
 
 // ---------------------------------------------------------------------------
@@ -181,10 +216,13 @@ function buildReportPageHTML(title, periodLabel, total, tableHtml, orientation){
 
   .summary-bar{
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
-    background:#F5F7FA; border-radius:12px; padding:12px 18px; margin-bottom:20px;
+    background:#F5F7FA; border-radius:12px; padding:12px 18px; margin-bottom:6px;
     font-size:12.6px; font-weight:700; color:#31465C;
   }
   .summary-bar span.count{ color:#0A8F6A; }
+  .unique-note{
+    margin:0 4px 20px; font-size:10.5px; color:#8A97A6; font-weight:600;
+  }
 
   table{
     width:100%;
@@ -238,6 +276,7 @@ function buildReportPageHTML(title, periodLabel, total, tableHtml, orientation){
     <span>${periodLabel}</span>
     <span>عدد المتدربين: <span class="count">${total}</span></span>
   </div>
+  <p class="unique-note">* كل متدرب يُحتسب مرة واحدة في الإجمالي الكلي أعلاه حتى لو التحق بأكثر من قسم</p>
 
   ${tableHtml}
 
@@ -259,7 +298,8 @@ function printDepartmentsReport(){
     return;
   }
 
-  const { rows, total } = groupCountByField(list, "department");
+  const { rows } = groupCountByField(list, "department");
+  const total = countUniqueStudents(list);
   const bodyRows = rows.map(r => `
     <tr>
       <td>${escapeHtml(r.label)}</td>
@@ -304,11 +344,13 @@ function printDepartmentsReport(){
  * تُجمِّع قائمة متدربين حسب الفئة الرئيسية التي ينتمي إليها قسم كل متدرب
  * (عبر findCategoryForDepartment() في js/departments.js، بحسب هيكل CATEGORIES
  * الأربع: الفئات الطبية، الفئات الطبية المساعدة، الأقسام الإدارية، أقسام
- * الهندسة والصيانة)، وتُرجع مصفوفة {label, count} مرتبة أبجدياً عربياً مع
- * الإجمالي. أي قسم لا ينتمي لأي فئة معروفة (لا يُفترض حدوثه عادة) يُجمَّع
- * تحت تسمية "غير محدد" بدل إسقاطه من التقرير.
+ * الهندسة والصيانة)، وتُرجع مصفوفة {label, count} مرتبة أبجدياً عربياً.
+ * count هنا هو عدد صفوف الالتحاق الفعلي بتلك الفئة (وليس عدد الأفراد
+ * الفريدين — راجع تعليق countUniqueStudents أعلاه لتفاصيل الفرق). أي قسم
+ * لا ينتمي لأي فئة معروفة (لا يُفترض حدوثه عادة) يُجمَّع تحت تسمية "غير
+ * محدد" بدل إسقاطه من التقرير.
  * @param {Array} list - قائمة سجلات المتدربين
- * @returns {{rows:Array<{label:string,count:number}>, total:number}}
+ * @returns {{rows:Array<{label:string,count:number}>}}
  */
 function groupCountByCategory(list){
   const map = new Map();
@@ -320,7 +362,7 @@ function groupCountByCategory(list){
   const rows = Array.from(map.entries())
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => a.label.localeCompare(b.label, "ar"));
-  return { rows, total: list.length };
+  return { rows };
 }
 
 function printCategoriesReport(){
@@ -330,7 +372,8 @@ function printCategoriesReport(){
     return;
   }
 
-  const { rows, total } = groupCountByCategory(list);
+  const { rows } = groupCountByCategory(list);
+  const total = countUniqueStudents(list);
   const bodyRows = rows.map(r => `
     <tr>
       <td>${escapeHtml(r.label)}</td>
@@ -378,7 +421,8 @@ function printCollegesReport(){
     return;
   }
 
-  const { rows, total } = groupCountByField(list, "college");
+  const { rows } = groupCountByField(list, "college");
+  const total = countUniqueStudents(list);
   const bodyRows = rows.map(r => `
     <tr>
       <td>${escapeHtml(r.label)}</td>
@@ -423,9 +467,12 @@ function printCollegesReport(){
  * يُجمِّع قائمة متدربين حسب القسم مع تفصيل كل قسم إلى: عدد المتدربين، عدد
  * الذكور، عدد الإناث، عدد التدريب الإلزامي، وعدد التدريب التطوعي. السجلات
  * التي أُنشئت قبل إضافة حقلي الجنس/نوع التدريب (قيمتها فارغة) تُحتسب ضمن
- * إجمالي القسم لكنها لا تُضاف لأي من أعمدة التفصيل الأربعة.
+ * إجمالي القسم لكنها لا تُضاف لأي من أعمدة التفصيل الأربعة. عدد كل صف قسم
+ * هنا هو عدد صفوف الالتحاق الفعلي بذلك القسم (وليس عدد أفراد فريدين — راجع
+ * computeUniqueDetailedTotals() أدناه للإجمالي الكلي الصحيح الذي يُحتسب فيه
+ * كل متدرب مرة واحدة فقط).
  * @param {Array} list - قائمة سجلات المتدربين المفلترة حسب الفترة
- * @returns {{rows:Array<object>, totals:object}}
+ * @returns {{rows:Array<object>}}
  */
 function groupDetailedByDepartment(list){
   const map = new Map();
@@ -444,16 +491,33 @@ function groupDetailedByDepartment(list){
 
   const rows = Array.from(map.values()).sort((a, b) => a.department.localeCompare(b.department, "ar"));
 
-  const totals = rows.reduce((acc, r) => {
-    acc.total += r.total;
-    acc.male += r.male;
-    acc.female += r.female;
-    acc.mandatory += r.mandatory;
-    acc.volunteer += r.volunteer;
-    return acc;
-  }, { total: 0, male: 0, female: 0, mandatory: 0, volunteer: 0 });
+  return { rows };
+}
 
-  return { rows, totals };
+/**
+ * إجمالي كلي صحيح لتقرير التفصيل: كل متدرب فريد (بحسب studentUniqueKey())
+ * يُحتسب مرة واحدة فقط حتى لو ظهر في أكثر من صف قسم — بعكس الجمع المباشر
+ * لأعمدة rows في groupDetailedByDepartment() الذي يُضاعِف عدد نفس الشخص
+ * بعدد الأقسام التي التحق بها. الجنس/نوع التدريب لكل متدرب فريد يُؤخذان من
+ * أول سجل ظهر له في القائمة (وهما ثابتان لكل شخص بغض النظر عن القسم عادةً).
+ * @param {Array} list - قائمة سجلات المتدربين (غير مجمّعة بعد)
+ * @returns {{total:number, male:number, female:number, mandatory:number, volunteer:number}}
+ */
+function computeUniqueDetailedTotals(list){
+  const seen = new Map();
+  list.forEach(s => {
+    const key = studentUniqueKey(s);
+    if (!seen.has(key)) seen.set(key, s);
+  });
+
+  const totals = { total: seen.size, male: 0, female: 0, mandatory: 0, volunteer: 0 };
+  seen.forEach(s => {
+    if (s.gender === "ذكر") totals.male += 1;
+    else if (s.gender === "انثى") totals.female += 1;
+    if (s.training_type === "تدريب إلزامي") totals.mandatory += 1;
+    else if (s.training_type === "تدريب تطوعي") totals.volunteer += 1;
+  });
+  return totals;
 }
 
 function printDetailedReport(){
@@ -463,7 +527,8 @@ function printDetailedReport(){
     return;
   }
 
-  const { rows, totals } = groupDetailedByDepartment(list);
+  const { rows } = groupDetailedByDepartment(list);
+  const totals = computeUniqueDetailedTotals(list);
   const bodyRows = rows.map(r => `
     <tr>
       <td>${escapeHtml(r.department)}</td>
