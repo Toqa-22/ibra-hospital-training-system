@@ -349,7 +349,26 @@ function getGroupStatusSummary(records){
 // ---------------------------------------------------------------------------
 // رسم الجدول (مع الفرز، الترقيم، الصفوف القابلة للتوسيع، وزر التقرير)
 // ---------------------------------------------------------------------------
-const REPORT_COLSPAN = 11;
+const REPORT_COLSPAN = 10;
+
+/**
+ * تقسيم نص إلى سطرين داخل خلية الجدول: أول كلمتين في السطر الأول، وبقية
+ * الكلمات في السطر الثاني — يُستخدم لأعمدة الكلية/التخصص/القسم التي تحوي
+ * غالباً عبارات طويلة (مثل "قسم تقنية المعلومات والإحصاء")، فيمنع هذا
+ * التقسيم توسّع عرض العمود بشكل مبالغ فيه مع إبقاء النص كاملاً ومقروءاً.
+ * نصوص من كلمة أو كلمتين فقط تُعرض في سطر واحد كما هي دون أي تقسيم.
+ * @param {string} text - النص المطلوب عرضه داخل الخلية
+ * @returns {string} نص HTML جاهز (مُهرَّب عبر escapeHtml) بفاصل <br> عند الحاجة
+ */
+function breakAfterTwoWords(text){
+  const value = (text || "").trim();
+  if (!value) return "—";
+  const words = value.split(/\s+/);
+  if (words.length <= 2) return escapeHtml(value);
+  const firstLine = words.slice(0, 2).join(" ");
+  const restLine = words.slice(2).join(" ");
+  return `${escapeHtml(firstLine)}<br>${escapeHtml(restLine)}`;
+}
 
 /**
  * الدالة الرئيسية والأكبر في لوحة التحكم: تُطبّق الفلاتر، تُجمّع السجلات المتكررة،
@@ -400,15 +419,17 @@ function renderTable(){
         </div>`;
       html += `
         <tr>
-          <td>${escapeHtml(group.student_name)}</td>
-          <td>${escapeHtml(group.phone)}</td>
-          <td>${escapeHtml(r.college || "—")}</td>
-          <td>${escapeHtml(r.specialization)}</td>
-          <td>${escapeHtml(r.department)}</td>
+          <td>
+            ${escapeHtml(group.student_name)}
+            <div class="group-subtext">${escapeHtml(group.phone)}</div>
+          </td>
+          <td>${breakAfterTwoWords(r.college)}</td>
+          <td>${breakAfterTwoWords(r.specialization)}</td>
+          <td>${breakAfterTwoWords(r.department)}</td>
+          <td>${formatDateShort(r.registration_date)}</td>
           <td>${formatDateShort(r.training_start)}</td>
           <td>${formatDateShort(r.training_end)}</td>
           <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
-          <td>${formatDateShort(r.registration_date)}</td>
           <td><span class="status-pill ${status.cls}">${status.label}</span></td>
           <td>${singleActionsCell}</td>
         </tr>`;
@@ -421,7 +442,7 @@ function renderTable(){
 
       html += `
         <tr class="group-row" data-group="${groupId}">
-          <td colspan="2">
+          <td>
             <span class="toggle-caret">▾</span>${escapeHtml(group.student_name)}
             <div class="group-subtext">${escapeHtml(group.phone)}</div>
           </td>
@@ -429,9 +450,9 @@ function renderTable(){
             <span class="count-badge">${group.records.length} أقسام</span>
             <span class="expand-hint">اضغط لعرض تفاصيل كل قسم ▾ (تعديل كل قسم على حدة)</span>
           </td>
+          <td>${formatDateShort(group.records[0].registration_date)}</td>
           <td colspan="2">${formatDateShort(earliestStart.toISOString().slice(0, 10))} ← ${formatDateShort(latestEnd.toISOString().slice(0, 10))}</td>
           <td>يختلف حسب القسم</td>
-          <td>${formatDateShort(group.records[0].registration_date)}</td>
           <td><span class="status-pill ${statusSummary.cls}">${statusSummary.label}</span></td>
           <td>${actionsCell}</td>
         </tr>`;
@@ -439,14 +460,14 @@ function renderTable(){
         const status = getTrainingStatus(r.training_start, r.training_end);
         html += `
           <tr class="sub-row hidden" data-parent="${groupId}">
-            <td colspan="2"></td>
-            <td>${escapeHtml(r.college || "—")}</td>
-            <td>${escapeHtml(r.specialization)}</td>
-            <td>${escapeHtml(r.department)}</td>
+            <td></td>
+            <td>${breakAfterTwoWords(r.college)}</td>
+            <td>${breakAfterTwoWords(r.specialization)}</td>
+            <td>${breakAfterTwoWords(r.department)}</td>
+            <td>${formatDateShort(r.registration_date)}</td>
             <td>${formatDateShort(r.training_start)}</td>
             <td>${formatDateShort(r.training_end)}</td>
             <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
-            <td>${formatDateShort(r.registration_date)}</td>
             <td><span class="status-pill ${status.cls}">${status.label}</span></td>
             <td>
               <div class="actions-cell">
