@@ -349,15 +349,15 @@ function getGroupStatusSummary(records){
 // ---------------------------------------------------------------------------
 // رسم الجدول (مع الفرز، الترقيم، الصفوف القابلة للتوسيع، وزر التقرير)
 // ---------------------------------------------------------------------------
-const REPORT_COLSPAN = 10;
+const REPORT_COLSPAN = 9;
 
 /**
  * تقسيم نص إلى عدة أسطر داخل خلية الجدول: كل سطر يحوي كلمتين فقط (وليس أول
- * كلمتين ثم الباقي في سطر واحد) — يُستخدم لأعمدة اسم الطالب/الكلية/التخصص/
- * القسم التي تحوي غالباً عبارات طويلة (مثل "قسم تقنية المعلومات والإحصاء")،
- * فيمنع هذا التقسيم توسّع عرض العمود بشكل مبالغ فيه مع إبقاء النص كاملاً
- * ومقروءاً. نصوص من كلمة أو كلمتين فقط تُعرض في سطر واحد كما هي دون أي
- * تقسيم.
+ * كلمتين ثم الباقي في سطر واحد) — يُستخدم لأعمدة اسم الطالب/القسم وداخل كل
+ * من الكلية/التخصص في العمود المدمج buildCollegeSpecCell أدناه، لأنها تحوي
+ * غالباً عبارات طويلة (مثل "قسم تقنية المعلومات والإحصاء")، فيمنع هذا
+ * التقسيم توسّع عرض العمود بشكل مبالغ فيه مع إبقاء النص كاملاً ومقروءاً.
+ * نصوص من كلمة أو كلمتين فقط تُعرض في سطر واحد كما هي دون أي تقسيم.
  * @param {string} text - النص المطلوب عرضه داخل الخلية
  * @returns {string} نص HTML جاهز (مُهرَّب عبر escapeHtml) بفواصل <br> بين كل سطرين
  */
@@ -371,6 +371,19 @@ function breakAfterTwoWords(text){
     lines.push(words.slice(i, i + 2).join(" "));
   }
   return lines.map(line => escapeHtml(line)).join("<br>");
+}
+
+/**
+ * بناء محتوى خلية "الكلية / التخصص" المدمجة: الكلية أعلى (كل سطرين من
+ * كلماتها على سطر منفصل عبر breakAfterTwoWords)، ثم فاصل "---" في سطر
+ * مستقل، ثم التخصص بنفس أسلوب التقسيم أسفله. يُستخدم في كل من الصف العادي
+ * والصف الفرعي (سجل قسم واحد لكل منهما).
+ * @param {string} college - اسم الكلية/الجامعة
+ * @param {string} specialization - التخصص
+ * @returns {string} نص HTML جاهز لعرضه داخل خلية <td> واحدة
+ */
+function buildCollegeSpecCell(college, specialization){
+  return `${breakAfterTwoWords(college)}<br>---<br>${breakAfterTwoWords(specialization)}`;
 }
 
 /**
@@ -426,8 +439,7 @@ function renderTable(){
             ${breakAfterTwoWords(group.student_name)}
             <div class="group-subtext">${escapeHtml(group.phone)}</div>
           </td>
-          <td>${breakAfterTwoWords(r.college)}</td>
-          <td>${breakAfterTwoWords(r.specialization)}</td>
+          <td>${buildCollegeSpecCell(r.college, r.specialization)}</td>
           <td>${breakAfterTwoWords(r.department)}</td>
           <td>${formatDateShort(r.registration_date)}</td>
           <td>${formatDateShort(r.training_start)}</td>
@@ -449,9 +461,9 @@ function renderTable(){
             <span class="toggle-caret">▾</span>${breakAfterTwoWords(group.student_name)}
             <div class="group-subtext">${escapeHtml(group.phone)}</div>
           </td>
-          <td colspan="3">
+          <td colspan="2">
             <span class="count-badge">${group.records.length} أقسام</span>
-            <span class="expand-hint">اضغط لعرض تفاصيل كل قسم ▾ (تعديل كل قسم على حدة)</span>
+            <span class="expand-hint">اضغط لعرض تفاصيل كل قسم</span>
           </td>
           <td>${formatDateShort(group.records[0].registration_date)}</td>
           <td colspan="2">${formatDateShort(earliestStart.toISOString().slice(0, 10))} ← ${formatDateShort(latestEnd.toISOString().slice(0, 10))}</td>
@@ -464,8 +476,7 @@ function renderTable(){
         html += `
           <tr class="sub-row hidden" data-parent="${groupId}">
             <td></td>
-            <td>${breakAfterTwoWords(r.college)}</td>
-            <td>${breakAfterTwoWords(r.specialization)}</td>
+            <td>${buildCollegeSpecCell(r.college, r.specialization)}</td>
             <td>${breakAfterTwoWords(r.department)}</td>
             <td>${formatDateShort(r.registration_date)}</td>
             <td>${formatDateShort(r.training_start)}</td>
