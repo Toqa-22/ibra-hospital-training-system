@@ -352,22 +352,25 @@ function getGroupStatusSummary(records){
 const REPORT_COLSPAN = 10;
 
 /**
- * تقسيم نص إلى سطرين داخل خلية الجدول: أول كلمتين في السطر الأول، وبقية
- * الكلمات في السطر الثاني — يُستخدم لأعمدة الكلية/التخصص/القسم التي تحوي
- * غالباً عبارات طويلة (مثل "قسم تقنية المعلومات والإحصاء")، فيمنع هذا
- * التقسيم توسّع عرض العمود بشكل مبالغ فيه مع إبقاء النص كاملاً ومقروءاً.
- * نصوص من كلمة أو كلمتين فقط تُعرض في سطر واحد كما هي دون أي تقسيم.
+ * تقسيم نص إلى عدة أسطر داخل خلية الجدول: كل سطر يحوي كلمتين فقط (وليس أول
+ * كلمتين ثم الباقي في سطر واحد) — يُستخدم لأعمدة اسم الطالب/الكلية/التخصص/
+ * القسم التي تحوي غالباً عبارات طويلة (مثل "قسم تقنية المعلومات والإحصاء")،
+ * فيمنع هذا التقسيم توسّع عرض العمود بشكل مبالغ فيه مع إبقاء النص كاملاً
+ * ومقروءاً. نصوص من كلمة أو كلمتين فقط تُعرض في سطر واحد كما هي دون أي
+ * تقسيم.
  * @param {string} text - النص المطلوب عرضه داخل الخلية
- * @returns {string} نص HTML جاهز (مُهرَّب عبر escapeHtml) بفاصل <br> عند الحاجة
+ * @returns {string} نص HTML جاهز (مُهرَّب عبر escapeHtml) بفواصل <br> بين كل سطرين
  */
 function breakAfterTwoWords(text){
   const value = (text || "").trim();
   if (!value) return "—";
   const words = value.split(/\s+/);
   if (words.length <= 2) return escapeHtml(value);
-  const firstLine = words.slice(0, 2).join(" ");
-  const restLine = words.slice(2).join(" ");
-  return `${escapeHtml(firstLine)}<br>${escapeHtml(restLine)}`;
+  const lines = [];
+  for (let i = 0; i < words.length; i += 2){
+    lines.push(words.slice(i, i + 2).join(" "));
+  }
+  return lines.map(line => escapeHtml(line)).join("<br>");
 }
 
 /**
