@@ -74,16 +74,18 @@ function enforceEvalCommentsMaxLines(value){
  * حساب حجم خط مناسب (بالبكسل) لصندوق «ملاحظات عامة» عند الطباعة، بحيث يصغر
  * تدريجياً كلما طال النص — لضمان بقاء كامل القسم ج (والتوقيع بعده) داخل
  * حدود صفحة A4 الفعلية ولا يتجاوزها، دون الحاجة لأي تمرير (scroll) أو قص
- * للنص عند الطباعة الورقية.
+ * للنص عند الطباعة الورقية. الأحجام هنا أكبر من الحجم الافتراضي المستخدم في
+ * بقية النموذج عمداً (وتُطبع بخط عريض دائماً — راجع .comments-box أدناه)
+ * لإبراز نص الملاحظات العامة عن باقي حقول النموذج.
  * @param {string} text - نص الملاحظات العامة (قبل الترميز HTML)
  * @returns {number} حجم الخط بالبكسل
  */
 function evalCommentsFontSize(text){
   const len = (text || "").length;
-  if (len <= 220) return 11;
-  if (len <= 350) return 10;
-  if (len <= 480) return 9;
-  return 8;
+  if (len <= 220) return 15;
+  if (len <= 350) return 13.5;
+  if (len <= 480) return 12.5;
+  return 11.5;
 }
 
 /**
@@ -231,10 +233,12 @@ async function showEvaluationModal(group){
     ? `${formatDateShort(primary.training_start)} — ${formatDateShort(primary.training_end)}`
     : "غير محدد";
 
-  // قيم افتراضية معقولة، تُستبدل لاحقاً بآخر تقييم محفوظ إن وُجد
+  // قيم افتراضية معقولة، تُستبدل لاحقاً بآخر تقييم محفوظ إن وُجد. تُكتب
+  // بالإنجليزية عمداً (وليس "سلطنة عُمان"/"مستشفى إبراء" بالعربية) لأن نموذج
+  // الطباعة بالكامل بالإنجليزية (راجع buildEvaluationPrintHTML أدناه).
   yearInput.value = "";
-  countryInput.value = "سلطنة عُمان";
-  placeInput.value = "مستشفى إبراء";
+  countryInput.value = "Sultanate of Oman";
+  placeInput.value = "Ibra Hospital";
   commentsInput.value = "";
   syncEvalCommentsCounter(overlay);
   supervisorInput.value = "";
@@ -254,8 +258,8 @@ async function showEvaluationModal(group){
       if (existing){
         overlay.dataset.evalId = existing.id;
         yearInput.value = existing.year_of_study || "";
-        countryInput.value = existing.country || "سلطنة عُمان";
-        placeInput.value = existing.place_of_training || "مستشفى إبراء";
+        countryInput.value = existing.country || "Sultanate of Oman";
+        placeInput.value = existing.place_of_training || "Ibra Hospital";
         commentsInput.value = enforceEvalCommentsMaxLines(existing.general_comments || "");
         syncEvalCommentsCounter(overlay);
         supervisorInput.value = existing.supervisor_name || "";
@@ -275,6 +279,33 @@ async function showEvaluationModal(group){
   }
 
   bindEvaluationActions(overlay, group, primary);
+}
+
+/**
+ * فحص اكتمال كل حقول نموذج التقييم (باستثناء لا شيء — كل الحقول إلزامية
+ * قبل الطباعة تحديداً، بعكس الحفظ الذي يكتفي باشتراط اسم المشرف فقط) وإرجاع
+ * قائمة بأسماء الحقول الفارغة بالعربية لعرضها في رسالة خطأ واضحة للمستخدم.
+ * تُستخدم فقط من زر «طباعة» في bindEvaluationActions() — الحفظ له تحقق
+ * مستقل وأخف (اسم المشرف فقط) لأن التقييم قد يُحفظ كمسودة قبل اكتماله.
+ * @param {object} data - بيانات التقييم من collectEvaluationFormData()
+ * @returns {string[]} أسماء الحقول الناقصة بالعربية (فارغة = لا نقص)
+ */
+function getMissingEvaluationFields(data){
+  const missing = [];
+  if (!data.student_name) missing.push("اسم الطالب");
+  if (!data.specialty) missing.push("التخصص");
+  if (!data.university) missing.push("الجامعة");
+  if (!data.period_label || data.period_label === "غير محدد") missing.push("فترة التدريب");
+  if (!data.year_of_study) missing.push("السنة الدراسية");
+  if (!data.country) missing.push("الدولة");
+  if (!data.place_of_training) missing.push("مكان التدريب");
+  EVAL_RATING_ROWS.forEach(row => {
+    if (!data.ratings[row.key]) missing.push(`تقييم ${row.labelAr}`);
+  });
+  if (!data.general_comments) missing.push("الملاحظات العامة");
+  if (!data.supervisor_name) missing.push("اسم المشرف المباشر");
+  if (!data.evaluation_date) missing.push("تاريخ التقييم");
+  return missing;
 }
 
 /**
@@ -302,7 +333,18 @@ function bindEvaluationActions(overlay, group, primary){
   });
 
   freshPrint.addEventListener("click", () => {
+    const errorEl = overlay.querySelector(".e-error");
     const data = collectEvaluationFormData(overlay, group, primary);
+
+    // لا طباعة قبل اكتمال كل حقول النموذج — راجع getMissingEvaluationFields()
+    const missing = getMissingEvaluationFields(data);
+    if (missing.length > 0){
+      errorEl.textContent = `يرجى تعبئة جميع الحقول قبل الطباعة (الناقص: ${missing.join("، ")})`;
+      errorEl.classList.add("show");
+      return;
+    }
+
+    errorEl.classList.remove("show");
     printReportHTML(buildEvaluationPrintHTML(data));
   });
 
@@ -440,8 +482,10 @@ function buildEvaluationPrintHTML(data){
     border-bottom:1.5px solid #1B2A3A;
   }
   .p-row{ display:flex; gap:6px; margin-bottom:5px; }
-  .p-row .p-label{ font-weight:800; white-space:nowrap; }
-  .p-row .p-value{ flex:1; border-bottom:1px dotted #8A97A6; padding-bottom:1px; }
+  .p-row-pair{ display:flex; gap:16px; margin-bottom:5px; }
+  .p-row-pair .p-half{ flex:1; display:flex; gap:6px; min-width:0; }
+  .p-label{ font-weight:800; white-space:nowrap; }
+  .p-value{ flex:1; border-bottom:1px dotted #8A97A6; padding-bottom:1px; min-width:0; }
 
   table.rate-table{
     width:100%;
@@ -470,10 +514,12 @@ function buildEvaluationPrintHTML(data){
     margin-bottom:14px;
     white-space:pre-wrap;
     overflow:hidden;
-    /* حجم الخط الافتراضي هنا (11px) يُطابق evalCommentsFontSize() لأقصر
+    /* حجم الخط الافتراضي هنا (15px) يُطابق evalCommentsFontSize() لأقصر
        نص؛ يُستبدل عملياً بحجم مُحسوب ديناميكياً عبر style مضمّن أسفل حسب
-       طول نص الملاحظات الفعلي — راجع buildEvaluationPrintHTML(). */
-    font-size:11px;
+       طول نص الملاحظات الفعلي — راجع buildEvaluationPrintHTML(). font-weight
+       عريض دائماً (وليس حسب الطول) لإبراز نص الملاحظات العامة تحديداً. */
+    font-size:15px;
+    font-weight:700;
     line-height:1.5;
   }
 
@@ -527,12 +573,18 @@ function buildEvaluationPrintHTML(data){
 
     <h3 class="sec-title">A. PERSONAL PARTICULARS</h3>
     <div class="p-row"><span class="p-label">Name of Student:</span><span class="p-value">${escapeHtml(data.student_name)}</span></div>
-    <div class="p-row"><span class="p-label">Specialty:</span><span class="p-value">${escapeHtml(data.specialty)}</span></div>
-    <div class="p-row"><span class="p-label">University:</span><span class="p-value">${escapeHtml(data.university)}</span></div>
-    <div class="p-row"><span class="p-label">Year of Study:</span><span class="p-value">${escapeHtml(data.year_of_study)}</span></div>
-    <div class="p-row"><span class="p-label">Country:</span><span class="p-value">${escapeHtml(data.country)}</span></div>
-    <div class="p-row"><span class="p-label">Place of Training / Attachment:</span><span class="p-value">${escapeHtml(data.place_of_training)}</span></div>
-    <div class="p-row"><span class="p-label">Period:</span><span class="p-value">${escapeHtml(data.period_label)}</span></div>
+    <div class="p-row-pair">
+      <div class="p-half"><span class="p-label">University:</span><span class="p-value">${escapeHtml(data.university)}</span></div>
+      <div class="p-half"><span class="p-label">Specialty:</span><span class="p-value">${escapeHtml(data.specialty)}</span></div>
+    </div>
+    <div class="p-row-pair">
+      <div class="p-half"><span class="p-label">Country:</span><span class="p-value">${escapeHtml(data.country)}</span></div>
+      <div class="p-half"><span class="p-label">Place of Training / Attachment:</span><span class="p-value">${escapeHtml(data.place_of_training)}</span></div>
+    </div>
+    <div class="p-row-pair">
+      <div class="p-half"><span class="p-label">Year of Study:</span><span class="p-value">${escapeHtml(data.year_of_study)}</span></div>
+      <div class="p-half"><span class="p-label">Period:</span><span class="p-value">${escapeHtml(data.period_label)}</span></div>
+    </div>
 
     <h3 class="sec-title" style="margin-top:14px">B. STUDENTS PERFORMANCE (Tick the appropriate letter below)</h3>
     <table class="rate-table">
