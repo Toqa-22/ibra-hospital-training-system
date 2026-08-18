@@ -420,7 +420,7 @@ function renderTable(){
       html += `
         <tr>
           <td>
-            ${escapeHtml(group.student_name)}
+            ${breakAfterTwoWords(group.student_name)}
             <div class="group-subtext">${escapeHtml(group.phone)}</div>
           </td>
           <td>${breakAfterTwoWords(r.college)}</td>
@@ -443,7 +443,7 @@ function renderTable(){
       html += `
         <tr class="group-row" data-group="${groupId}">
           <td>
-            <span class="toggle-caret">▾</span>${escapeHtml(group.student_name)}
+            <span class="toggle-caret">▾</span>${breakAfterTwoWords(group.student_name)}
             <div class="group-subtext">${escapeHtml(group.phone)}</div>
           </td>
           <td colspan="3">
