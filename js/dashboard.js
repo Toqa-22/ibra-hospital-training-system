@@ -441,9 +441,9 @@ function renderTable(){
           </td>
           <td>${buildCollegeSpecCell(r.college, r.specialization)}</td>
           <td>${breakAfterTwoWords(r.department)}</td>
-          <td>${formatDateShort(r.registration_date)}</td>
-          <td>${formatDateShort(r.training_start)}</td>
-          <td>${formatDateShort(r.training_end)}</td>
+          <td class="td-date">${formatDateShort(r.registration_date)}</td>
+          <td class="td-date">${formatDateShort(r.training_start)}</td>
+          <td class="td-date">${formatDateShort(r.training_end)}</td>
           <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
           <td><span class="status-pill ${status.cls}">${status.label}</span></td>
           <td>${singleActionsCell}</td>
@@ -465,8 +465,8 @@ function renderTable(){
             <span class="count-badge">${group.records.length} أقسام</span>
             <span class="expand-hint">اضغط لعرض تفاصيل كل قسم</span>
           </td>
-          <td>${formatDateShort(group.records[0].registration_date)}</td>
-          <td colspan="2">${formatDateShort(earliestStart.toISOString().slice(0, 10))} ← ${formatDateShort(latestEnd.toISOString().slice(0, 10))}</td>
+          <td class="td-date">${formatDateShort(group.records[0].registration_date)}</td>
+          <td class="td-date" colspan="2">${formatDateShort(earliestStart.toISOString().slice(0, 10))} ← ${formatDateShort(latestEnd.toISOString().slice(0, 10))}</td>
           <td>يختلف حسب القسم</td>
           <td><span class="status-pill ${statusSummary.cls}">${statusSummary.label}</span></td>
           <td>${actionsCell}</td>
@@ -478,9 +478,9 @@ function renderTable(){
             <td></td>
             <td>${buildCollegeSpecCell(r.college, r.specialization)}</td>
             <td>${breakAfterTwoWords(r.department)}</td>
-            <td>${formatDateShort(r.registration_date)}</td>
-            <td>${formatDateShort(r.training_start)}</td>
-            <td>${formatDateShort(r.training_end)}</td>
+            <td class="td-date">${formatDateShort(r.registration_date)}</td>
+            <td class="td-date">${formatDateShort(r.training_start)}</td>
+            <td class="td-date">${formatDateShort(r.training_end)}</td>
             <td>${formatDurationLabel(calcDurationDays(r.training_start, r.training_end))}</td>
             <td><span class="status-pill ${status.cls}">${status.label}</span></td>
             <td>
