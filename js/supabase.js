@@ -213,6 +213,34 @@ async function updateStudentRecord(id, updates){
   return data;
 }
 
+// -------- إرجاع سجل متدرب واحد إلى قائمة الانتظار --------
+/**
+ * إرجاع سجل قسم واحد لطالب من لوحة الإدارة إلى قائمة الانتظار (waiting.html):
+ * تضبط is_waitlist=true وتمسح تاريخي بداية/نهاية التدريب (null لكليهما، لأن
+ * قائمة الانتظار بلا فترة محددة بعد بحسب تصميم المشروع — راجع
+ * insertWaitlistStudents أعلاه لنفس القاعدة عند الإنشاء المبدئي). لا تُعدِّل
+ * أي حقل آخر (الاسم، الهاتف، القسم، الكلية...) فهذه تبقى كما هي — عكس تام
+ * لما تفعله assignTrainingPeriods() أعلاه عند نقل السجل من الانتظار للوحة
+ * الإدارة. تُستخدم حصرياً من زر «↩️ إرجاع لقائمة الانتظار» في لوحة الإدارة.
+ * تتطلب أن تكون سياسة RLS الخاصة بالتعديل (allow_update_students) مفعّلة.
+ * @param {string} id - معرّف UUID للسجل المطلوب إرجاعه لقائمة الانتظار
+ * @returns {Array} السجل بعد التعديل كما أرجعته Supabase
+ */
+async function returnStudentRecordToWaitlist(id){
+  const { data, error } = await supabaseClient
+    .from(TABLE_NAME)
+    .update({
+      training_start: null,
+      training_end: null,
+      is_waitlist: true,
+    })
+    .eq("id", id)
+    .select();
+
+  if (error) throw error;
+  return data;
+}
+
 // -------- تحديد فترة تدريب لكل أقسام طالب واحد في قائمة الانتظار دفعة واحدة --------
 /**
  * تُستخدم حصرياً من زر «📅 تحديد الفترات ونقل الطالب» في صفحة قائمة الانتظار
