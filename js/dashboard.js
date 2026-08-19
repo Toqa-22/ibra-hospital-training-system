@@ -431,6 +431,7 @@ function renderTable(){
           <button class="btn-report" data-report-idx="${gIdx}">🖨️ طباعة</button>
           <button class="btn-eval" data-eval-idx="${gIdx}">📋 تقييم</button>
           <button class="btn-edit" data-edit-group="${gIdx}" data-edit-record="0">✏️ تعديل</button>
+          <button class="btn-waitlist" data-return-waiting-group="${gIdx}" data-return-waiting-record="0">↩️ إرجاع لقائمة الانتظار</button>
           <button class="btn-delete" data-delete-idx="${gIdx}">🗑 حذف</button>
         </div>`;
       html += `
@@ -486,6 +487,7 @@ function renderTable(){
             <td>
               <div class="actions-cell">
                 <button class="btn-edit" data-edit-group="${gIdx}" data-edit-record="${rIdx}">✏️ تعديل</button>
+                <button class="btn-waitlist" data-return-waiting-group="${gIdx}" data-return-waiting-record="${rIdx}">↩️ إرجاع لقائمة الانتظار</button>
                 <button class="btn-delete" data-delete-record-group="${gIdx}" data-delete-record-idx="${rIdx}">🗑 حذف</button>
               </div>
             </td>
@@ -550,6 +552,15 @@ function renderTable(){
     });
   });
 
+  tbody.querySelectorAll("[data-return-waiting-group]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const gIdx = Number(btn.dataset.returnWaitingGroup);
+      const rIdx = Number(btn.dataset.returnWaitingRecord);
+      handleReturnToWaitlist(pageGroups[gIdx].records[rIdx]);
+    });
+  });
+
   tbody.querySelectorAll("[data-delete-idx]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -588,6 +599,50 @@ async function handleEditStudent(record){
   } catch (err){
     console.error("فشل تعديل بيانات المتدرب:", err);
     showToast(describeSupabaseError(err, "تعذر حفظ التعديلات"), "error");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// إرجاع سجل قسم واحد لطالب من لوحة الإدارة إلى قائمة الانتظار
+// ---------------------------------------------------------------------------
+/**
+ * معالجة الضغط على زر «↩️ إرجاع لقائمة الانتظار»: تعرض نافذة تأكيد صريحة أولاً
+ * (السجل يفقد تاريخي بداية/نهاية التدريب الحاليين ويختفي من لوحة الإدارة
+ * فوراً بعد التأكيد، وينتقل لقائمة الانتظار waiting.html بدلاً من ذلك — راجع
+ * returnStudentRecordToWaitlist() في js/supabase.js لتفاصيل التحديث)، ولا
+ * تُنفّذ أي تعديل فعلي إلا بعد موافقة المستخدم. تعمل على سجل قسم واحد فقط
+ * (وليس كل أقسام الطالب دفعة واحدة) — فطالب بعدة أقسام يمكن إرجاع بعضها
+ * فقط لقائمة الانتظار مع إبقاء الباقي في لوحة الإدارة.
+ * @param {object} record - سجل القسم الواحد المطلوب إرجاعه لقائمة الانتظار
+ */
+async function handleReturnToWaitlist(record){
+  const confirmed = await showConfirm({
+    title: "إرجاع الطالب لقائمة الانتظار",
+    text: `سيتم إرجاع ${escapeHtml(record.student_name)} (${escapeHtml(record.department)}) إلى قائمة الانتظار، وسيُحذف تاريخا بداية ونهاية التدريب الحاليان لهذا القسم. يمكن تحديد فترة جديدة لاحقاً من صفحة قائمة الانتظار.`,
+    confirmLabel: "إرجاع لقائمة الانتظار",
+  });
+  if (!confirmed) return;
+
+  try {
+    await returnStudentRecordToWaitlist(record.id);
+
+    const idx = state.allStudents.findIndex(s => s.id === record.id);
+    if (idx !== -1){
+      state.allStudents[idx] = {
+        ...state.allStudents[idx],
+        training_start: null,
+        training_end: null,
+        is_waitlist: true,
+      };
+    }
+
+    showToast("تم إرجاع الطالب إلى قائمة الانتظار", "success");
+    renderDepartmentCards();
+    populateDepartmentFilterOptions();
+    renderTable();
+  } catch (err){
+    console.error("فشل إرجاع الطالب لقائمة الانتظار:", err);
+    showToast(describeSupabaseError(err, "تعذر إرجاع الطالب لقائمة الانتظار"), "error");
   }
 }
 
