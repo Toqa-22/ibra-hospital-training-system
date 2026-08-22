@@ -294,6 +294,10 @@ function ensureAssignPeriodsModal(){
           <div class="as-phone"></div>
         </div>
         <div class="periods-list"></div>
+        <div class="as-note-field">
+          <label for="asNote">ملاحظة (اختياري)</label>
+          <textarea id="asNote" class="as-note" rows="3" maxlength="300" placeholder="أي ملاحظة بخصوص هذا الطالب..."></textarea>
+        </div>
         <p class="e-error"></p>
         <div class="modal-actions">
           <button class="m-cancel">إلغاء</button>
@@ -312,8 +316,11 @@ function ensureAssignPeriodsModal(){
  * قسم معاً (كلها بلا فترة بعد)؛ هذه النافذة تعرض صفاً مستقلاً بنفس تصميم
  * صفوف الفترة في نموذج التسجيل (period-row) لكل قسم من أقسامه، وتفرض تحديد
  * فترة صحيحة لكل قسم منها قبل قبول الحفظ — فلا يُحفظ شيء حتى تكتمل كل الأقسام.
+ * تعرض أيضاً حقل «ملاحظة» واحد (مُعبَّأ من ملاحظة أول سجل من سجلات الطالب،
+ * إن وُجدت) قابل للتعديل، تُحفظ نفس القيمة المعدَّلة لكل سجل من سجلات هذا
+ * الطالب معاً عند الحفظ (الملاحظة تخص الطالب نفسه، وليست لكل قسم على حدة).
  * @param {{student_name:string, phone:string, records:Array}} group - مجموعة سجلات الطالب في قائمة الانتظار (سجل واحد لكل قسم)
- * @returns {Promise<Array<{id:string, training_start:string, training_end:string}>|null>} قائمة التحديثات لكل سجل عند الحفظ، أو null عند الإلغاء
+ * @returns {Promise<Array<{id:string, training_start:string, training_end:string, waitlist_note:string}>|null>} قائمة التحديثات لكل سجل عند الحفظ، أو null عند الإلغاء
  */
 function showAssignMultiPeriodModal(group){
   return new Promise(resolve => {
@@ -321,10 +328,12 @@ function showAssignMultiPeriodModal(group){
     const nameEl = overlay.querySelector(".as-name");
     const phoneEl = overlay.querySelector(".as-phone");
     const listEl = overlay.querySelector(".periods-list");
+    const noteEl = overlay.querySelector(".as-note");
     const errorEl = overlay.querySelector(".e-error");
 
     nameEl.textContent = group.student_name || "";
     phoneEl.textContent = group.phone || "";
+    noteEl.value = (group.records[0] && group.records[0].waitlist_note) || "";
     errorEl.textContent = "";
     errorEl.classList.remove("show");
 
@@ -407,12 +416,13 @@ function showAssignMultiPeriodModal(group){
     const onConfirm = () => {
       let allValid = true;
       const updates = [];
+      const noteValue = noteEl.value.trim();
 
       group.records.forEach(r => {
         const d = localDates.get(r.id) || {};
         const ok = d.start && d.end && new Date(d.end) >= new Date(d.start);
         if (!ok) allValid = false;
-        updates.push({ id: r.id, training_start: d.start || null, training_end: d.end || null });
+        updates.push({ id: r.id, training_start: d.start || null, training_end: d.end || null, waitlist_note: noteValue });
       });
 
       if (!allValid){
