@@ -160,7 +160,7 @@ function ensureEvaluationModal(){
         <textarea class="ev-comments" rows="4" maxlength="${EVAL_COMMENTS_MAX_LENGTH}" placeholder="اكتب ملاحظات عامة عن أداء المتدرب خلال فترة التدريب..."></textarea>
         <div class="ev-comments-counter"><span class="cc-count">0</span> / ${EVAL_COMMENTS_MAX_LENGTH} حرف — بحد أقصى ${EVAL_COMMENTS_MAX_LINES} أسطر، لضمان ثبات النص داخل مساحته على ورقة A4 عند الطباعة</div>
         <div class="eval-grid" style="margin-top:12px">
-          <div class="eval-field"><label>اسم المشرف المباشر</label><input class="ev-supervisor" placeholder="مثال: إبراهيم السيناوي"></div>
+          <div class="eval-field"><label>اسم المشرف المباشر</label><input class="ev-supervisor" placeholder="مثال: إبراهيم السناوي"></div>
           <div class="eval-field"><label>التاريخ</label><input type="date" class="ev-date"></div>
         </div>
       </div>
