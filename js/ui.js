@@ -295,7 +295,7 @@ function ensureAssignPeriodsModal(){
         </div>
         <div class="periods-list"></div>
         <div class="as-note-field">
-          <label for="asNote">ملاحظة (اختياري)</label>
+          <label for="asNote">ملاحظة</label>
           <textarea id="asNote" class="as-note" rows="3" maxlength="300" placeholder="أي ملاحظة بخصوص هذا الطالب..."></textarea>
         </div>
         <p class="e-error"></p>
