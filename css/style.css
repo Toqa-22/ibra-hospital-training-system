@@ -235,6 +235,7 @@ select:focus-visible,
 }
 .field input.error,
 .field select.error,
+.field textarea.error,
 .field .searchable-select.error .searchable-input{
   border-color: var(--danger);
   background: var(--danger-light);
@@ -565,6 +566,7 @@ select:focus-visible,
   color:#8A6416;
   margin-bottom:6px;
 }
+.waitlist-note-field label .req{ color: var(--danger); margin-inline-start:3px; }
 .waitlist-note-field textarea{
   width:100%;
   padding: 10px 12px;
@@ -581,6 +583,10 @@ select:focus-visible,
 .waitlist-note-field textarea:focus{
   outline:none;
   box-shadow: 0 0 0 4px var(--warning-light);
+}
+.waitlist-note-field textarea.error{
+  border-color: var(--danger);
+  background: var(--danger-light);
 }
 
 .period-row .p-field label{
