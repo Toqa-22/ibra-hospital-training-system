@@ -301,9 +301,30 @@ function groupDuplicateStudents(students){
 }
 
 /**
+ * ترتيب أولوية حالة التدريب لمجموعة طالب واحدة: قيد التدريب (0) أولاً، ثم لم
+ * يبدأ (1)، ثم انتهى (2) أخيراً — بنفس منطق أولوية getGroupStatusSummary
+ * أعلاه (وجود قسم واحد نشط يكفي لاعتبار كل المجموعة "قيد التدريب"، وهكذا).
+ * تُستخدم كمعيار فرز أساسي دائم في sortGroups() أدناه، يُطبَّق قبل أي عمود
+ * يختاره المستخدم للفرز — فتبقى الحالات الثلاث دائماً مُجمَّعة بهذا الترتيب
+ * بصرياً بغض النظر عن العمود/الاتجاه المُفعَّل حالياً، والذي يُستخدم فقط
+ * كفارز ثانوي داخل كل مجموعة حالة على حدة.
+ * @param {{records:Array}} group - مجموعة سجلات طالب واحد
+ * @returns {number} 0 لقيد التدريب، 1 للم يبدأ، 2 لانتهى
+ */
+function statusRank(group){
+  const statuses = group.records.map(r => getTrainingStatus(r.training_start, r.training_end).key);
+  if (statuses.includes("active")) return 0;
+  if (statuses.includes("upcoming")) return 1;
+  return 2;
+}
+
+/**
  * فرز مجموعات الطلاب (بعد التجميع) حسب العمود والاتجاه المختارين حالياً في
  * state.sortField و state.sortDir. بالنسبة لأعمدة خاصة بسجل واحد (كالقسم أو
- * التخصص)، يُستخدم أحدث سجل في كل مجموعة كمرجع للفرز.
+ * التخصص)، يُستخدم أحدث سجل في كل مجموعة كمرجع للفرز. حالة التدريب (قيد
+ * التدريب/لم يبدأ/انتهى — راجع statusRank أعلاه) هي دائماً المعيار الأساسي
+ * الأول للفرز بغض النظر عن اختيار المستخدم، والعمود المختار يُستخدم كفارز
+ * ثانوي فقط داخل كل مجموعة حالة.
  * @param {Array} groups - مجموعات الطلاب الناتجة من groupDuplicateStudents
  * @returns {Array} نفس المجموعات بعد الفرز
  */
@@ -322,6 +343,9 @@ function sortGroups(groups){
   };
 
   return groups.slice().sort((a, b) => {
+    const ra = statusRank(a), rb = statusRank(b);
+    if (ra !== rb) return ra - rb;
+
     const ka = keyFor(a), kb = keyFor(b);
     if (ka < kb) return -1 * dir;
     if (ka > kb) return 1 * dir;
