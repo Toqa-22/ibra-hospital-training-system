@@ -56,6 +56,7 @@ function bindTrainingModeToggle(){
       buttons.forEach(b => b.classList.toggle("active", b === btn));
       renderPeriods();
       clearFieldError("periods");
+      clearFieldError("waitlist_note");
     });
   });
 }
@@ -301,7 +302,7 @@ function setFieldError(name){
   const field = document.querySelector(`[data-field="${name}"]`);
   if (!field) return;
   field.classList.add("has-error");
-  const input = field.querySelector("input, select");
+  const input = field.querySelector("input, select, textarea");
   if (input) input.classList.add("error");
 }
 /**
@@ -312,7 +313,7 @@ function clearFieldError(name){
   const field = document.querySelector(`[data-field="${name}"]`);
   if (!field) return;
   field.classList.remove("has-error");
-  const input = field.querySelector("input, select");
+  const input = field.querySelector("input, select, textarea");
   if (input) input.classList.remove("error");
 }
 
@@ -361,6 +362,15 @@ function validateForm(){
   }
   if (periodsValid) clearFieldError("periods"); else { setFieldError("periods"); valid = false; }
 
+  // تحقق من إلزامية «الملاحظة» — فقط في وضع قائمة الانتظار وعند اختيار قسم
+  // واحد على الأقل (لا معنى لإلزامها إن لم يُختر أي قسم بعد).
+  let waitlistNoteValid = true;
+  if (deptPickerState.mode === "waitlist" && departments.length > 0){
+    const note = document.getElementById("waitlistNote").value.trim();
+    waitlistNoteValid = note.length > 0;
+  }
+  if (waitlistNoteValid) clearFieldError("waitlist_note"); else { setFieldError("waitlist_note"); valid = false; }
+
   if (!valid) return null;
 
   const items = departments.map(dep => {
@@ -401,7 +411,7 @@ function initFormSubmit(){
 
     const values = validateForm();
     if (!values){
-      showToast("يرجى تحديد فترة تدريب صحيحة لكل قسم مختار", "error");
+      showToast("يرجى تعبئة جميع الحقول المطلوبة بشكل صحيح", "error");
       return;
     }
 
