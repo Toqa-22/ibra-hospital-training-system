@@ -428,7 +428,8 @@ function initFormSubmit(){
         await insertStudentsWithPeriods(base, datedItems);
       }
       if (waitlistItems.length > 0){
-        await insertWaitlistStudents(base, waitlistItems.map(i => i.department));
+        const waitlistNote = document.getElementById("waitlistNote").value.trim();
+        await insertWaitlistStudents(base, waitlistItems.map(i => i.department), waitlistNote);
       }
 
       const parts = [];
@@ -444,6 +445,7 @@ function initFormSubmit(){
       document.querySelectorAll("#trainingModeToggle .mode-btn").forEach(b => {
         b.classList.toggle("active", b.dataset.mode === "dated");
       });
+      document.getElementById("waitlistNote").value = "";
       renderCategoryCards();
       renderDeptChecklist();
       renderSelectedSummary();
