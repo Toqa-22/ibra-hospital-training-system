@@ -210,7 +210,9 @@ function renderPeriods(){
   const notice = document.getElementById("waitlistModeNotice");
   const depts = Array.from(deptPickerState.selected);
 
-  // وضع قائمة الانتظار: لا حاجة لأي صفوف تواريخ — رسالة توضيحية واحدة فقط
+  // وضع قائمة الانتظار: لا حاجة لأي صفوف تواريخ — رسالة توضيحية واحدة (تتضمن
+  // حقل الملاحظة الإلزامي) تظهر فقط بعد اختيار قسم واحد على الأقل، فلا معنى
+  // لإظهارها قبل أن يختار المستخدم أي قسم بعد.
   if (deptPickerState.mode === "waitlist"){
     hint.style.display = "none";
     list.style.display = "none";
