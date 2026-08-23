@@ -125,7 +125,7 @@ function ensureEvaluationModal(){
           <div class="eval-field"><label>التخصص</label><input class="ev-specialty"></div>
           <div class="eval-field"><label>الجامعة / الكلية</label><input class="ev-university"></div>
           <div class="eval-field"><label>فترة التدريب</label><input class="ev-period"></div>
-          <div class="eval-field"><label>السنة الدراسية <span class="ev-year-hint">(من بيانات المتدرب)</span></label><input class="ev-year" readonly></div>
+          <div class="eval-field"><label>السنة الدراسية</label><input class="ev-year" placeholder="مثال: السنة الثانية"></div>
           <div class="eval-field"><label>الدولة</label><input class="ev-country"></div>
           <div class="eval-field full"><label>مكان التدريب</label><input class="ev-place"></div>
         </div>
@@ -236,13 +236,10 @@ async function showEvaluationModal(group){
   // قيم افتراضية معقولة، تُستبدل لاحقاً بآخر تقييم محفوظ إن وُجد. تُكتب
   // بالإنجليزية عمداً (وليس "سلطنة عُمان"/"مستشفى إبراء" بالعربية) لأن نموذج
   // الطباعة بالكامل بالإنجليزية (راجع buildEvaluationPrintHTML أدناه).
-  // القسم أ (السنة الدراسية تحديداً): مصدر بيانات واحد فقط — حقل year_of_study
-  // في سجل الطالب نفسه (المُدخَل من صفحة تسجيل المتدربين، ويُعدَّل لاحقاً فقط
-  // من «تعديل بيانات المتدرب» في لوحة الإدارة). الحقل هنا readonly عمداً
-  // ويُقرأ دائماً من primary.year_of_study مباشرة (وليس من أي تقييم محفوظ
-  // سابقاً — لا يُعاد تحميله لاحقاً من existing.year_of_study أدناه) حتى تبقى
-  // القيمة متزامنة دائماً مع بيانات المتدرب الحالية، بغض النظر عن أي قيمة
-  // قديمة كانت محفوظة في تقييم سابق لنفس الطالب.
+  // القسم أ (السنة الدراسية تحديداً): تُعبَّأ افتراضياً من حقل year_of_study
+  // في سجل الطالب (المُدخَل من صفحة تسجيل المتدربين) كنقطة بداية مريحة، لكنها
+  // تبقى حقلاً نصياً قابلاً للتعديل يدوياً هنا بالكامل — أي تعديل يُحفظ فقط
+  // ضمن سجل التقييم نفسه، دون أن يُغيّر بيانات الطالب الأصلية في جدول students.
   yearInput.value = (primary && primary.year_of_study) || "";
   countryInput.value = "Sultanate of Oman";
   placeInput.value = "Ibra Hospital";
@@ -264,6 +261,7 @@ async function showEvaluationModal(group){
       const existing = await fetchLatestEvaluationForStudent(primary.id);
       if (existing){
         overlay.dataset.evalId = existing.id;
+        yearInput.value = existing.year_of_study || (primary && primary.year_of_study) || "";
         countryInput.value = existing.country || "Sultanate of Oman";
         placeInput.value = existing.place_of_training || "Ibra Hospital";
         commentsInput.value = enforceEvalCommentsMaxLines(existing.general_comments || "");
