@@ -335,6 +335,9 @@ function validateForm(){
   const specialization = document.getElementById("specialization").value.trim();
   const college = document.getElementById("college").value.trim();
   const gender = document.getElementById("gender").value;
+  const nationality = document.getElementById("nationality").value.trim();
+  const yearOfStudy = document.getElementById("year_of_study").value.trim();
+  const placeOfTraining = document.getElementById("place_of_training").value.trim();
   const trainingType = document.getElementById("training_type").value;
   const departments = Array.from(deptPickerState.selected);
 
@@ -344,6 +347,9 @@ function validateForm(){
     ["specialization", specialization.length > 0],
     ["college", college.length > 0], // الكلية/الجامعة أصبحت حقلاً إلزامياً
     ["gender", gender.length > 0],
+    ["nationality", nationality.length > 0],
+    ["year_of_study", yearOfStudy.length > 0],
+    ["place_of_training", placeOfTraining.length > 0],
     ["training_type", trainingType.length > 0],
     ["department", departments.length > 0],
   ].forEach(([field, ok]) => {
@@ -383,7 +389,7 @@ function validateForm(){
     return { department: dep, start: d.start, end: d.end, waitlist: false };
   });
 
-  return { name, phone, specialization, college, gender, trainingType, items };
+  return { name, phone, specialization, college, gender, nationality, yearOfStudy, placeOfTraining, trainingType, items };
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +433,9 @@ function initFormSubmit(){
         specialization: values.specialization,
         college: values.college,
         gender: values.gender,
+        nationality: values.nationality,
+        year_of_study: values.yearOfStudy,
+        place_of_training: values.placeOfTraining,
         training_type: values.trainingType,
       };
 
