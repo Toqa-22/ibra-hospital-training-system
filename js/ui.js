@@ -154,6 +154,18 @@ function ensureEditModal(){
             </select>
           </div>
           <div class="e-field">
+            <label>الجنسية</label>
+            <input type="text" class="e-nationality">
+          </div>
+          <div class="e-field">
+            <label>السنة الدراسية</label>
+            <input type="text" class="e-year">
+          </div>
+          <div class="e-field">
+            <label>مكان التدريب</label>
+            <input type="text" class="e-place">
+          </div>
+          <div class="e-field">
             <label>نوع التدريب</label>
             <select class="e-training-type">
               <option value="">اختر</option>
@@ -208,6 +220,9 @@ function showEditStudentModal(record, options = {}){
     const collegeInput = overlay.querySelector(".e-college");
     const specInput = overlay.querySelector(".e-spec");
     const genderSelect = overlay.querySelector(".e-gender");
+    const nationalityInput = overlay.querySelector(".e-nationality");
+    const yearInput = overlay.querySelector(".e-year");
+    const placeInput = overlay.querySelector(".e-place");
     const trainingTypeSelect = overlay.querySelector(".e-training-type");
     const deptSelect = overlay.querySelector(".e-dept");
     const startInput = overlay.querySelector(".e-start");
@@ -220,6 +235,9 @@ function showEditStudentModal(record, options = {}){
     collegeInput.value = record.college || "";
     specInput.value = record.specialization || "";
     genderSelect.value = record.gender || "";
+    nationalityInput.value = record.nationality || "";
+    yearInput.value = record.year_of_study || "";
+    placeInput.value = record.place_of_training || "";
     trainingTypeSelect.value = record.training_type || "";
     deptSelect.innerHTML = DEPARTMENTS.map(d => `<option value="${escapeHtml(d)}" ${d === record.department ? "selected" : ""}>${escapeHtml(d)}</option>`).join("");
     startInput.value = record.training_start || "";
@@ -246,12 +264,15 @@ function showEditStudentModal(record, options = {}){
       const college = collegeInput.value.trim();
       const specialization = specInput.value.trim();
       const gender = genderSelect.value;
+      const nationality = nationalityInput.value.trim();
+      const year_of_study = yearInput.value.trim();
+      const place_of_training = placeInput.value.trim();
       const training_type = trainingTypeSelect.value;
       const department = deptSelect.value;
       const training_start = startInput.value;
       const training_end = endInput.value;
 
-      if (!student_name || !phone || !specialization || !gender || !training_type || !department || !training_start || !training_end){
+      if (!student_name || !phone || !specialization || !gender || !nationality || !year_of_study || !place_of_training || !training_type || !department || !training_start || !training_end){
         errorEl.textContent = "يرجى تعبئة جميع الحقول المطلوبة";
         errorEl.classList.add("show");
         return;
@@ -267,7 +288,7 @@ function showEditStudentModal(record, options = {}){
         return;
       }
 
-      cleanup({ student_name, phone, college, specialization, gender, training_type, department, training_start, training_end });
+      cleanup({ student_name, phone, college, specialization, gender, nationality, year_of_study, place_of_training, training_type, department, training_start, training_end });
     };
 
     cancelBtn.addEventListener("click", onCancel);
@@ -299,9 +320,10 @@ function ensureAssignPeriodsModal(){
           <textarea id="asNote" class="as-note" rows="3" maxlength="300" placeholder="أي ملاحظة بخصوص هذا الطالب..."></textarea>
         </div>
         <p class="e-error"></p>
-        <div class="modal-actions">
+        <div class="modal-actions assign-periods-actions">
           <button class="m-cancel">إلغاء</button>
-          <button class="m-confirm m-save">حفظ ونقل إلى لوحة الإدارة</button>
+          <button class="m-confirm m-save-only">حفظ</button>
+          <button class="m-confirm m-transfer">نقل إلى لوحة الإدارة</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
@@ -319,8 +341,17 @@ function ensureAssignPeriodsModal(){
  * تعرض أيضاً حقل «ملاحظة» واحد (مُعبَّأ من ملاحظة أول سجل من سجلات الطالب،
  * إن وُجدت) قابل للتعديل، تُحفظ نفس القيمة المعدَّلة لكل سجل من سجلات هذا
  * الطالب معاً عند الحفظ (الملاحظة تخص الطالب نفسه، وليست لكل قسم على حدة).
+ *
+ * زران منفصلان تماماً (وليس زر واحد يجمع العمليتين):
+ *   - «حفظ»: يحفظ الفترات (والملاحظة) في قاعدة البيانات فقط، ويُبقي الطالب
+ *     في قائمة الانتظار (is_waitlist لا يتغيّر). يمكن إعادة فتح نفس النافذة
+ *     لاحقاً فتظهر القيم المحفوظة تماماً.
+ *   - «نقل إلى لوحة الإدارة»: يستخدم نفس الفترات المعروضة حالياً في النموذج
+ *     (سواء كانت محفوظة مسبقاً أو أُدخلت للتو دون ضغط حفظ أولاً) وينقل الطالب
+ *     فعلياً (is_waitlist=false) — هذا الزر فقط هو المسؤول عن النقل.
+ * كلا الزرين يفرضان تحديد فترة صحيحة لكل قسم قبل القبول.
  * @param {{student_name:string, phone:string, records:Array}} group - مجموعة سجلات الطالب في قائمة الانتظار (سجل واحد لكل قسم)
- * @returns {Promise<Array<{id:string, training_start:string, training_end:string, waitlist_note:string}>|null>} قائمة التحديثات لكل سجل عند الحفظ، أو null عند الإلغاء
+ * @returns {Promise<{action:"save"|"transfer", updates:Array<{id:string, training_start:string, training_end:string, waitlist_note:string}>}|null>} نتيجة العملية المختارة، أو null عند الإلغاء
  */
 function showAssignMultiPeriodModal(group){
   return new Promise(resolve => {
@@ -404,16 +435,25 @@ function showAssignMultiPeriodModal(group){
     overlay.classList.add("show");
 
     const cancelBtn = overlay.querySelector(".m-cancel");
-    const confirmBtn = overlay.querySelector(".m-save");
+    const saveBtn = overlay.querySelector(".m-save-only");
+    const transferBtn = overlay.querySelector(".m-transfer");
 
     const cleanup = (result) => {
       overlay.classList.remove("show");
       cancelBtn.removeEventListener("click", onCancel);
-      confirmBtn.removeEventListener("click", onConfirm);
+      saveBtn.removeEventListener("click", onSave);
+      transferBtn.removeEventListener("click", onTransfer);
       resolve(result);
     };
     const onCancel = () => cleanup(null);
-    const onConfirm = () => {
+
+    /**
+     * يتحقق من صحة فترة كل قسم ويبني مصفوفة التحديثات المشتركة بين زري
+     * «حفظ» و«نقل إلى لوحة الإدارة» — نفس منطق التحقق تماماً لكليهما، فقط
+     * الإجراء الذي يُتخذ بالنتيجة (حفظ فقط أو حفظ+نقل) يختلف بين المستدعيَين.
+     * @returns {Array|null} مصفوفة التحديثات إن كانت كل الفترات صحيحة، أو null
+     */
+    const collectValidUpdates = () => {
       let allValid = true;
       const updates = [];
       const noteValue = noteEl.value.trim();
@@ -431,16 +471,27 @@ function showAssignMultiPeriodModal(group){
           const ok = d.start && d.end && new Date(d.end) >= new Date(d.start);
           row.classList.toggle("has-error", !ok);
         });
-        errorEl.textContent = "يرجى تحديد فترة تدريب صحيحة لكل قسم قبل الحفظ";
+        errorEl.textContent = "يرجى تحديد فترة تدريب صحيحة لكل قسم";
         errorEl.classList.add("show");
-        return;
+        return null;
       }
+      return updates;
+    };
 
-      cleanup(updates);
+    const onSave = () => {
+      const updates = collectValidUpdates();
+      if (!updates) return;
+      cleanup({ action: "save", updates });
+    };
+    const onTransfer = () => {
+      const updates = collectValidUpdates();
+      if (!updates) return;
+      cleanup({ action: "transfer", updates });
     };
 
     cancelBtn.addEventListener("click", onCancel);
-    confirmBtn.addEventListener("click", onConfirm);
+    saveBtn.addEventListener("click", onSave);
+    transferBtn.addEventListener("click", onTransfer);
   });
 }
 
