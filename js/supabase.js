@@ -110,7 +110,7 @@ async function insertStudentsForDepartments(base, departments){
  * البيانات لكل قسم مختار، بنفس بيانات الطالب المشتركة (الاسم، الهاتف،
  * التخصص، الكلية)، لكن بفترة تدريب (بداية/نهاية) خاصة بكل قسم على حدة،
  * وبنفس تاريخ التسجيل (اليوم) لكل السجلات المُنشأة معاً في هذا الطلب.
- * @param {{student_name, phone, specialization, college, gender, training_type}} base - بيانات الطالب المشتركة بين كل السجلات
+ * @param {{student_name, phone, specialization, college, gender, nationality, year_of_study, place_of_training, training_type}} base - بيانات الطالب المشتركة بين كل السجلات
  * @param {Array<{department, start, end}>} items - قائمة الأقسام المختارة وفترة كل واحد منها
  * @returns {Array} السجلات التي أنشأتها Supabase فعلياً (مع id لكل سجل)
  */
@@ -123,6 +123,9 @@ async function insertStudentsWithPeriods(base, items){
     specialization: base.specialization.trim(),
     college: (base.college || "").trim() || null,
     gender: (base.gender || "").trim() || null,
+    nationality: (base.nationality || "").trim() || null,
+    year_of_study: (base.year_of_study || "").trim() || null,
+    place_of_training: (base.place_of_training || "").trim() || null,
     training_type: (base.training_type || "").trim() || null,
     department: item.department.trim(),
     training_start: item.start,
@@ -147,7 +150,7 @@ async function insertStudentsWithPeriods(base, items){
  * بنفس بيانات الطالب المشتركة، لكن بدون training_start/training_end (تبقى
  * فارغة حتى تُحدَّد لاحقاً من صفحة waiting.html)، وبعلامة is_waitlist=true
  * التي تُخفيها عن لوحة الإدارة وتُظهرها فقط في قائمة الانتظار.
- * @param {{student_name, phone, specialization, college}} base - بيانات الطالب المشتركة
+ * @param {{student_name, phone, specialization, college, gender, nationality, year_of_study, place_of_training, training_type}} base - بيانات الطالب المشتركة
  * @param {Array<string>} departments - أسماء الأقسام المطلوب إضافتها لقائمة الانتظار
  * @param {string} [note] - ملاحظة اختيارية تُنسخ لكل سجل من سجلات هذه الأقسام (حقل waitlist_note)
  * @returns {Array} السجلات التي أنشأتها Supabase فعلياً (مع id لكل سجل)
@@ -162,6 +165,9 @@ async function insertWaitlistStudents(base, departments, note){
     specialization: base.specialization.trim(),
     college: (base.college || "").trim() || null,
     gender: (base.gender || "").trim() || null,
+    nationality: (base.nationality || "").trim() || null,
+    year_of_study: (base.year_of_study || "").trim() || null,
+    place_of_training: (base.place_of_training || "").trim() || null,
     training_type: (base.training_type || "").trim() || null,
     department: dep.trim(),
     training_start: null,
@@ -199,6 +205,9 @@ async function updateStudentRecord(id, updates){
     specialization: updates.specialization.trim(),
     college: (updates.college || "").trim() || null,
     gender: (updates.gender || "").trim() || null,
+    nationality: (updates.nationality || "").trim() || null,
+    year_of_study: (updates.year_of_study || "").trim() || null,
+    place_of_training: (updates.place_of_training || "").trim() || null,
     training_type: (updates.training_type || "").trim() || null,
     department: updates.department.trim(),
     training_start: updates.training_start,
@@ -244,16 +253,49 @@ async function returnStudentRecordToWaitlist(id){
   return data;
 }
 
+// -------- حفظ فترات قائمة الانتظار فقط (بلا نقل) --------
+/**
+ * تُستخدم حصرياً من زر «حفظ» في نافذة «تحديد الفترات ونقل الطالب» بصفحة
+ * قائمة الانتظار (waiting.html): تُحدِّث فترة تدريب (بداية/نهاية) والملاحظة
+ * لكل سجل من سجلات طالب واحد، دون المساس بحقل is_waitlist إطلاقاً (لا يُذكر
+ * في payload أصلاً) — فيبقى الطالب في قائمة الانتظار كما هو، وتظهر له
+ * الفترات المحفوظة عند إعادة فتح نفس النافذة لاحقاً. عكس تام لـ
+ * assignTrainingPeriods() أدناه التي تضبط is_waitlist=false وتُستخدم للنقل
+ * الفعلي فقط. لا تنقل الطالب مهما تكرر الضغط على الزر.
+ * تتطلب أن تكون سياسة RLS الخاصة بالتعديل (allow_update_students) مفعّلة.
+ * @param {Array<{id:string, training_start:string, training_end:string, waitlist_note?:string}>} updates - تحديث فترة (والملاحظة اختيارياً) كل سجل عبر معرّفه
+ * @returns {Array} كل السجلات بعد التعديل كما أرجعتها Supabase
+ */
+async function saveWaitlistPeriods(updates){
+  const results = await Promise.all(updates.map(u =>
+    supabaseClient
+      .from(TABLE_NAME)
+      .update({
+        training_start: u.training_start,
+        training_end: u.training_end,
+        waitlist_note: (u.waitlist_note || "").trim() || null,
+      })
+      .eq("id", u.id)
+      .select()
+  ));
+
+  const failed = results.find(r => r.error);
+  if (failed) throw failed.error;
+
+  return results.flatMap(r => r.data || []);
+}
+
 // -------- تحديد فترة تدريب لكل أقسام طالب واحد في قائمة الانتظار دفعة واحدة --------
 /**
- * تُستخدم حصرياً من زر «📅 تحديد الفترات ونقل الطالب» في صفحة قائمة الانتظار
- * (waiting.html): تُحدِّث فترة تدريب (بداية/نهاية) كل سجل من سجلات طالب واحد
- * (سجل واحد لكل قسم من أقسامه) في طلب واحد، وتضبط is_waitlist=false لكل
- * سجل منها — فتنتقل كل أقسام الطالب معاً من قائمة الانتظار إلى لوحة الإدارة
- * دفعة واحدة، بدل الانتقال قسماً تلو الآخر. تُحدِّث أيضاً حقل الملاحظة
- * (waitlist_note) لكل سجل إن كانت موجودة ضمن update، للسماح بتعديلها من نفس
- * النافذة قبل النقل. لا تُعدِّل أي حقل آخر (الاسم، الهاتف، القسم...) فهذه
- * تبقى كما هي.
+ * تُستخدم حصرياً من زر «نقل إلى لوحة الإدارة» في نافذة «تحديد الفترات ونقل
+ * الطالب» بصفحة قائمة الانتظار (waiting.html): تُحدِّث فترة تدريب
+ * (بداية/نهاية) كل سجل من سجلات طالب واحد (سجل واحد لكل قسم من أقسامه) في
+ * طلب واحد، وتضبط is_waitlist=false لكل سجل منها — فتنتقل كل أقسام الطالب
+ * معاً من قائمة الانتظار إلى لوحة الإدارة دفعة واحدة، بدل الانتقال قسماً تلو
+ * الآخر. تُحدِّث أيضاً حقل الملاحظة (waitlist_note) لكل سجل. هذا التحديث
+ * (UPDATE بمعرّف كل سجل، وليس INSERT) يجعل الضغط على الزر أكثر من مرة آمناً
+ * تماماً — لا يُنشئ أي سجل مكرر، فقط يُعيد ضبط نفس القيم على نفس السجلات.
+ * راجع saveWaitlistPeriods() أعلاه لعملية الحفظ المستقلة (بلا نقل).
  * تتطلب أن تكون سياسة RLS الخاصة بالتعديل (allow_update_students) مفعّلة.
  * @param {Array<{id:string, training_start:string, training_end:string, waitlist_note?:string}>} updates - تحديث فترة (والملاحظة اختيارياً) كل سجل عبر معرّفه
  * @returns {Array} كل السجلات بعد التعديل كما أرجعتها Supabase
