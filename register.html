@@ -150,6 +150,30 @@
               <div class="error-msg">يرجى اختيار الجنس</div>
             </div>
 
+            <!-- حقل الجنسية: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب -->
+            <div class="field" data-field="nationality">
+              <label>الجنسية <span class="req">*</span></label>
+              <input type="text" id="nationality" placeholder="مثال: عُماني" autocomplete="off">
+              <div class="error-msg">هذا الحقل مطلوب</div>
+            </div>
+
+            <!-- حقل السنة الدراسية: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا
+                 الطالب، وهو المصدر الوحيد للسنة الدراسية في كامل النظام —
+                 نافذة التقييم (📋 تقييم في لوحة الإدارة) تقرأ هذه القيمة
+                 مباشرة بدل إدخالها بشكل مستقل، فتبقى متزامنة دائماً معها. -->
+            <div class="field" data-field="year_of_study">
+              <label>السنة الدراسية <span class="req">*</span></label>
+              <input type="text" id="year_of_study" placeholder="مثال: السنة الثالثة" autocomplete="off">
+              <div class="error-msg">هذا الحقل مطلوب</div>
+            </div>
+
+            <!-- حقل مكان التدريب: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب -->
+            <div class="field" data-field="place_of_training">
+              <label>مكان التدريب <span class="req">*</span></label>
+              <input type="text" id="place_of_training" placeholder="مثال: مستشفى إبراء" autocomplete="off">
+              <div class="error-msg">هذا الحقل مطلوب</div>
+            </div>
+
             <!-- حقل نوع التدريب: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب -->
             <div class="field" data-field="training_type">
               <label>نوع التدريب <span class="req">*</span></label>
