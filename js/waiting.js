@@ -8,10 +8,11 @@
 //
 //   - «📅 تحديد الفترات ونقل الطالب»: يفتح نافذة showAssignMultiPeriodModal
 //     (js/ui.js) التي تعرض صفاً مستقلاً لكل قسم من أقسام الطالب، وتفرض تحديد
-//     فترة صحيحة لكل قسم منها قبل القبول. عند الحفظ يُستدعى
-//     assignTrainingPeriods() الذي يُحدِّث كل سجلات الطالب دفعة واحدة ويضبط
-//     is_waitlist=false لها جميعاً — فينتقل الطالب بكل أقسامه معاً إلى لوحة
-//     الإدارة ويختفي من هنا دفعة واحدة، وليس قسماً تلو الآخر.
+//     فترة صحيحة لكل قسم منها قبل القبول. النافذة الآن بزرين منفصلين تماماً:
+//     «حفظ» يستدعي saveWaitlistPeriods() (يحفظ الفترات فقط، الطالب يبقى في
+//     قائمة الانتظار)، و«نقل إلى لوحة الإدارة» يستدعي assignTrainingPeriods()
+//     الذي يضبط is_waitlist=false لكل سجلات الطالب معاً — فينتقل بكل أقسامه
+//     دفعة واحدة إلى لوحة الإدارة ويختفي من هنا، وليس قسماً تلو الآخر.
 //   - «🗑 حذف»: يحذف الطالب نهائياً من قائمة الانتظار (كل سجلاته/أقسامه معاً)،
 //     بعد نافذة تأكيد صريحة.
 //
@@ -19,8 +20,9 @@
 //   1) js/config.js       — بيانات الاتصال بـ Supabase
 //   2) js/departments.js  — يوفر getDepartmentIcon() (تُستخدم داخل نافذة التحديد)
 //   3) js/ui.js           — يوفر showToast, showConfirm, showAssignMultiPeriodModal...
-//   4) js/supabase.js     — يوفر fetchWaitlistStudents, assignTrainingPeriods,
-//                            deleteStudentsByIds, describeSupabaseError
+//   4) js/supabase.js     — يوفر fetchWaitlistStudents, saveWaitlistPeriods,
+//                            assignTrainingPeriods, deleteStudentsByIds,
+//                            describeSupabaseError
 //
 // كل البيانات تُجلب مرة واحدة عند تحميل الصفحة وتُخزَّن في waitingState.all
 // (سجلات خام، سجل واحد لكل قسم)؛ التجميع حسب الطالب يحدث عند كل رسم عبر
@@ -225,18 +227,39 @@ function formatWaitlistDeptCount(n){
 /**
  * معالجة الضغط على زر «📅 تحديد الفترات ونقل الطالب»: تفتح نافذة
  * showAssignMultiPeriodModal() (js/ui.js) التي تعرض صفاً مستقلاً لكل قسم من
- * أقسام هذا الطالب، وتفرض تحديد فترة صحيحة لكل قسم منها قبل القبول. عند
- * الحفظ: يُستدعى assignTrainingPeriods() الذي يُحدِّث فترة كل سجل ويضبط
- * is_waitlist=false للجميع معاً في طلب واحد، فتختفي كل سجلات الطالب من
- * waitingState.all محلياً فوراً (وتظهر معاً عند فتح لوحة الإدارة لاحقاً، لأنها
- * تجلب فقط السجلات التي is_waitlist=false).
+ * أقسام هذا الطالب، وتفرض تحديد فترة صحيحة لكل قسم منها قبل القبول. النافذة
+ * الآن تُرجع action منفصلاً عن التحديثات:
+ *   - action === "save": يُستدعى saveWaitlistPeriods() فقط — يحفظ الفترات
+ *     والملاحظة دون أي نقل، ويبقى الطالب ظاهراً في قائمة الانتظار بنفس
+ *     القيم المحفوظة عند إعادة فتح النافذة لاحقاً.
+ *   - action === "transfer": يُستدعى assignTrainingPeriods() الذي يضبط
+ *     is_waitlist=false للجميع معاً في طلب واحد، فتختفي كل سجلات الطالب من
+ *     waitingState.all محلياً فوراً (وتظهر معاً عند فتح لوحة الإدارة لاحقاً).
  * @param {{student_name:string, phone:string, records:Array}} group - مجموعة سجلات الطالب في قائمة الانتظار
  */
 async function handleAssignPeriods(group){
-  const updates = await showAssignMultiPeriodModal(group);
-  if (!updates) return;
+  const result = await showAssignMultiPeriodModal(group);
+  if (!result) return;
+
+  const { action, updates } = result;
 
   try {
+    if (action === "save"){
+      const saved = await saveWaitlistPeriods(updates);
+
+      // تحديث waitingState.all محلياً بنفس القيم المحفوظة (الفترات + الملاحظة)
+      // دون حذف أي سجل — الطالب يبقى في قائمة الانتظار بصريّاً.
+      saved.forEach(rec => {
+        const idx = waitingState.all.findIndex(s => s.id === rec.id);
+        if (idx !== -1) waitingState.all[idx] = { ...waitingState.all[idx], ...rec };
+      });
+
+      showToast(`تم حفظ فترات ${group.student_name} في قائمة الانتظار`, "success");
+      renderWaitingTable();
+      return;
+    }
+
+    // action === "transfer"
     await assignTrainingPeriods(updates);
 
     const ids = group.records.map(r => r.id);
