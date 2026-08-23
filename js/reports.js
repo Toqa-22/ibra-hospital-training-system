@@ -588,10 +588,12 @@ function printDetailedReport(){
 // ---------------------------------------------------------------------------
 // التقرير الخامس: تصدير Excel شامل (ExcelJS، ملف .xlsx حقيقي)
 // ---------------------------------------------------------------------------
-// عناوين الأعمدة الاثني عشر بالترتيب الدقيق المطلوب. ملاحظة: الجنسية
+// عناوين الأعمدة الثلاث عشرة بالترتيب الدقيق المطلوب. ملاحظة: الجنسية
 // والمرحلة الدراسية ومكان التدريب لا تزال بلا مصدر بيانات في جدول students
 // حالياً (لم تُضَف هذه الحقول بعد لنموذج التسجيل)، فتظهر خلاياها فارغة إلى
-// حين إضافتها لاحقاً — بقية الأعمدة التسعة مبنية بالكامل من بيانات حقيقية.
+// حين إضافتها لاحقاً — بقية الأعمدة مبنية بالكامل من بيانات حقيقية، بما فيها
+// «مدة التدريب» الأخيرة (محسوبة بأيام العمل فقط عبر calcDurationDays/
+// formatDurationLabel — نفس حساب لوحة الإدارة تماماً، لا تكرار منطق).
 const EXCEL_HEADERS = [
   "اسم الطالب",
   "رقم الهاتف",
@@ -605,8 +607,9 @@ const EXCEL_HEADERS = [
   "الفئة",
   "القسم",
   "الفترة التدريبية لكل قسم",
+  "مدة التدريب",
 ];
-const EXCEL_COLUMN_WIDTHS = [26, 16, 24, 26, 14, 16, 18, 24, 18, 16, 22, 26];
+const EXCEL_COLUMN_WIDTHS = [26, 16, 24, 26, 14, 16, 18, 24, 18, 16, 22, 26, 18];
 const EXCEL_THIN_BLACK_BORDER = {
   top: { style: "thin", color: { argb: "FF000000" } },
   left: { style: "thin", color: { argb: "FF000000" } },
@@ -778,8 +781,12 @@ async function exportComprehensiveExcelReport(){
         const periodLabel = (r.training_start && r.training_end)
           ? `${formatDateShort(r.training_start)} - ${formatDateShort(r.training_end)}`
           : "—";
+        const durationLabel = (r.training_start && r.training_end)
+          ? formatDurationLabel(calcDurationDays(r.training_start, r.training_end))
+          : "—";
         setExcelCell(ws, row, 11, r.department || "", { align: "right", valign: "center" });
         setExcelCell(ws, row, 12, periodLabel, { align: "center", valign: "center" });
+        setExcelCell(ws, row, 13, durationLabel, { align: "center", valign: "center" });
       });
 
       currentRow = endRow + 1;
