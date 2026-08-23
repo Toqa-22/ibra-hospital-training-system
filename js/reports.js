@@ -77,6 +77,9 @@ function bindReportButtons(){
   document.getElementById("printDetailedReportBtn").addEventListener("click", () => {
     printDetailedReport();
   });
+  document.getElementById("exportExcelBtn").addEventListener("click", () => {
+    exportComprehensiveExcelReport();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -580,4 +583,231 @@ function printDetailedReport(){
     "landscape"
   );
   printReportHTML(html);
+}
+
+// ---------------------------------------------------------------------------
+// التقرير الخامس: تصدير Excel شامل (ExcelJS، ملف .xlsx حقيقي)
+// ---------------------------------------------------------------------------
+// عناوين الأعمدة الاثني عشر بالترتيب الدقيق المطلوب. ملاحظة: الجنسية
+// والمرحلة الدراسية ومكان التدريب لا تزال بلا مصدر بيانات في جدول students
+// حالياً (لم تُضَف هذه الحقول بعد لنموذج التسجيل)، فتظهر خلاياها فارغة إلى
+// حين إضافتها لاحقاً — بقية الأعمدة التسعة مبنية بالكامل من بيانات حقيقية.
+const EXCEL_HEADERS = [
+  "اسم الطالب",
+  "رقم الهاتف",
+  "التخصص",
+  "الكلية / الجامعة",
+  "الجنس",
+  "الجنسية",
+  "المرحلة الدراسية",
+  "مكان التدريب",
+  "نوع التدريب",
+  "الفئة",
+  "القسم",
+  "الفترة التدريبية لكل قسم",
+];
+const EXCEL_COLUMN_WIDTHS = [26, 16, 24, 26, 14, 16, 18, 24, 18, 16, 22, 26];
+const EXCEL_THIN_BLACK_BORDER = {
+  top: { style: "thin", color: { argb: "FF000000" } },
+  left: { style: "thin", color: { argb: "FF000000" } },
+  bottom: { style: "thin", color: { argb: "FF000000" } },
+  right: { style: "thin", color: { argb: "FF000000" } },
+};
+
+/**
+ * تنسيق خلية واحدة (خط، محاذاة RTL، تعبئة اختيارية، حدود سوداء رفيعة من كل
+ * الجهات) — دالة مساعدة مشتركة تُستدعى لكل خلية مستخدمة في التقرير (عنوان،
+ * ترويسة، بيانات) حسب مواصفات تنسيق الإكسل الموحّدة للنظام.
+ * @param {import('exceljs').Cell} cell - خلية ExcelJS المطلوب تنسيقها
+ * @param {{fill?:string, bold?:boolean, sz?:number, color?:string, wrap?:boolean, align?:string, valign?:string, numFmt?:string}} [opts]
+ */
+function styleExcelCell(cell, opts = {}){
+  const { fill, bold, sz, color, wrap, align, valign, numFmt } = opts;
+
+  cell.font = {
+    bold: !!bold,
+    size: sz || 11,
+    name: "Arial",
+    color: { argb: color || "FF000000" },
+  };
+
+  cell.alignment = {
+    horizontal: align || "right",
+    vertical: valign || "center",
+    wrapText: wrap !== false,
+    readingOrder: 2,
+  };
+
+  if (fill){
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+  }
+
+  cell.border = EXCEL_THIN_BLACK_BORDER;
+
+  if (numFmt) cell.numFmt = numFmt;
+}
+
+/**
+ * كتابة قيمة في خلية (بحسب رقم الصف والعمود) ثم تنسيقها فوراً عبر
+ * styleExcelCell(). القيم الفارغة/غير المعرَّفة تُكتب كنص فارغ بدل "undefined".
+ * @param {import('exceljs').Worksheet} ws
+ * @param {number} r - رقم الصف (1-indexed)
+ * @param {number} c - رقم العمود (1-indexed)
+ * @param {*} v - القيمة المطلوب كتابتها
+ * @param {object} [opts] - خيارات التنسيق، تُمرَّر مباشرة لـ styleExcelCell
+ * @returns {import('exceljs').Cell} الخلية بعد الكتابة والتنسيق
+ */
+function setExcelCell(ws, r, c, v, opts){
+  const cell = ws.getCell(r, c);
+  cell.value = (v === null || v === undefined) ? "" : v;
+  styleExcelCell(cell, opts);
+  return cell;
+}
+
+/**
+ * تنزيل ملف Workbook فعلياً كملف .xlsx حقيقي عبر Blob ورابط تنزيل مؤقت.
+ * @param {import('exceljs').Workbook} wb
+ * @param {string} filename - اسم الملف الناتج (بامتداد .xlsx)
+ */
+function downloadExcelWorkbook(wb, filename){
+  wb.calcProperties = { fullCalcOnLoad: true };
+  return wb.xlsx.writeBuffer().then(buf => {
+    const blob = new Blob([buf], { type: "application/octet-stream" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  });
+}
+
+/**
+ * تجميع قائمة سجلات متدربين (سجل واحد لكل قسم) إلى مجموعات لكل طالب فريد
+ * (بحسب studentUniqueKey أعلاه)، مع الحفاظ على ترتيب أول ظهور لكل طالب في
+ * القائمة، وترتيب سجلات كل طالب حسب تاريخ بداية التدريب تصاعدياً.
+ * @param {Array} list - قائمة سجلات المتدربين المفلترة حسب الفترة
+ * @returns {Array<{records:Array}>} مجموعة لكل طالب فريد
+ */
+function groupStudentsForExcel(list){
+  const order = [];
+  const map = new Map();
+  list.forEach(s => {
+    const key = studentUniqueKey(s);
+    if (!map.has(key)){
+      map.set(key, []);
+      order.push(key);
+    }
+    map.get(key).push(s);
+  });
+  return order.map(key => {
+    const records = map.get(key).slice().sort((a, b) => (a.training_start || "").localeCompare(b.training_start || ""));
+    return { records };
+  });
+}
+
+/**
+ * بناء وتنزيل «تقرير شامل للمتدربين» بصيغة .xlsx حقيقية عبر ExcelJS: صف
+ * عنوان مدموج، صف ترويسة رمادية، ثم مجموعة صفوف لكل طالب بعدد أقسامه —
+ * بيانات الطالب الأساسية (الاسم، الهاتف، التخصص...) تُدمج رأسياً وتُوسَّط
+ * عمودياً عبر كل صفوفه، بينما القسم والفترة يظهران في صف مستقل لكل قسم.
+ */
+async function exportComprehensiveExcelReport(){
+  const { list, periodFrom, periodTo } = getFilteredReportStudents();
+  if (list.length === 0){
+    showToast("لا يوجد متدربون ضمن هذه الفترة", "warning");
+    return;
+  }
+
+  const btn = document.getElementById("exportExcelBtn");
+  setButtonLoading(btn, true);
+
+  try {
+    const groups = groupStudentsForExcel(list);
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("تقرير شامل للمتدربين", {
+      views: [{ rightToLeft: true, showGridLines: false }],
+    });
+
+    const colCount = EXCEL_HEADERS.length;
+
+    // -------- صف 1: العنوان، مدموج عبر كل الأعمدة --------
+    ws.mergeCells(1, 1, 1, colCount);
+    setExcelCell(ws, 1, 1, "تقرير شامل للمتدربين", { bold: true, sz: 14, align: "center", valign: "center" });
+    ws.getRow(1).height = 28;
+
+    // -------- صف 2: الترويسة --------
+    EXCEL_HEADERS.forEach((label, idx) => {
+      setExcelCell(ws, 2, idx + 1, label, { bold: true, sz: 12, align: "center", valign: "center", fill: "FFD9D9D9" });
+    });
+    ws.getRow(2).height = 22;
+
+    // -------- الصفوف 3 فما فوق: بيانات كل طالب --------
+    let currentRow = 3;
+    groups.forEach(group => {
+      const startRow = currentRow;
+      const endRow = startRow + group.records.length - 1;
+      const first = group.records[0];
+      const category = findCategoryForDepartment((first.department || "").trim());
+
+      const baseValues = [
+        first.student_name || "",
+        first.phone || "",
+        first.specialization || "",
+        first.college || "",
+        first.gender || "",
+        "", // الجنسية — بلا مصدر بيانات بعد
+        "", // المرحلة الدراسية — بلا مصدر بيانات بعد
+        "", // مكان التدريب — بلا مصدر بيانات بعد
+        first.training_type || "",
+        (category && category.name) || "",
+      ];
+
+      baseValues.forEach((value, colIdx) => {
+        const col = colIdx + 1;
+        if (group.records.length > 1){
+          ws.mergeCells(startRow, col, endRow, col);
+        }
+        setExcelCell(ws, startRow, col, value, { align: colIdx === 0 || colIdx === 2 || colIdx === 3 ? "right" : "center", valign: "center" });
+      });
+
+      group.records.forEach((r, i) => {
+        const row = startRow + i;
+        const periodLabel = (r.training_start && r.training_end)
+          ? `${formatDateShort(r.training_start)} - ${formatDateShort(r.training_end)}`
+          : "—";
+        setExcelCell(ws, row, 11, r.department || "", { align: "right", valign: "center" });
+        setExcelCell(ws, row, 12, periodLabel, { align: "center", valign: "center" });
+      });
+
+      currentRow = endRow + 1;
+    });
+
+    const lastRow = currentRow - 1;
+
+    // -------- عرض الأعمدة، إعداد الصفحة، منطقة الطباعة، تكرار الترويسة --------
+    ws.columns.forEach((col, idx) => { col.width = EXCEL_COLUMN_WIDTHS[idx]; });
+
+    ws.pageSetup = {
+      orientation: "landscape",
+      paperSize: 9, // A4
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+      horizontalCentered: true,
+      printArea: `A1:${String.fromCharCode(64 + colCount)}${lastRow}`,
+    };
+    ws.pageSetup.printTitlesRow = "2:2";
+
+    await downloadExcelWorkbook(wb, "تقرير شامل للمتدربين.xlsx");
+    showToast("تم تصدير ملف Excel بنجاح", "success");
+  } catch (err){
+    console.error("فشل تصدير تقرير Excel الشامل:", err);
+    showToast("تعذر تصدير ملف Excel، يرجى المحاولة مرة أخرى", "error");
+  } finally {
+    setButtonLoading(btn, false);
+  }
 }
