@@ -804,6 +804,13 @@ select:focus-visible,
 .e-error.show{ display:block; }
 .m-save{ background: var(--secondary); color:#fff; }
 
+.assign-periods-actions{ flex-wrap:wrap; }
+.assign-periods-actions .m-save-only{ background: var(--secondary); color:#fff; flex:1 1 auto; }
+.assign-periods-actions .m-transfer{ background: var(--primary); color:#fff; flex:1 1 auto; }
+@media (max-width:480px){
+  .assign-periods-actions{ flex-direction:column; }
+}
+
 @media (max-width: 560px){
   .edit-form{ grid-template-columns: 1fr; }
 }
@@ -901,6 +908,7 @@ select:focus-visible,
   outline:none; border-color: var(--primary); box-shadow:0 0 0 3px var(--primary-light);
 }
 .eval-field input[readonly]{ background:#F1F4F8; color:#5B6B7C; }
+.ev-year-hint{ font-weight:600; font-size:10.5px; color: var(--text-muted); }
 .eval-section textarea{ resize:vertical; }
 .ev-comments-counter{
   margin-top:4px;
