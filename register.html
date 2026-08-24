@@ -185,6 +185,18 @@
               <div class="error-msg">يرجى اختيار نوع التدريب</div>
             </div>
 
+            <!-- حقل المرحلة الدراسية: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا
+                 الطالب — يُميّز هل المتدرب طالب حالياً أم خريج بالفعل. -->
+            <div class="field" data-field="academic_stage">
+              <label>المرحلة الدراسية (طالب - خريج) <span class="req">*</span></label>
+              <select id="academic_stage">
+                <option value="">اختر</option>
+                <option value="طالب">طالب</option>
+                <option value="خريج">خريج</option>
+              </select>
+              <div class="error-msg">يرجى اختيار المرحلة الدراسية</div>
+            </div>
+
             <!-- ==========================================================
                  منتقي «الفئة → الأقسام»: كل المحتوى الديناميكي بداخل
                  categoryGrid / deptChecklist / selectedSummary تُبنى بالكامل
