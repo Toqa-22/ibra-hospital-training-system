@@ -150,10 +150,17 @@
               <div class="error-msg">يرجى اختيار الجنس</div>
             </div>
 
-            <!-- حقل الجنسية: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب -->
+            <!-- حقل الجنسية: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب.
+                 قائمة منسدلة بخيار ثابت (Omani) بالإضافة لخيار "أخرى" يُظهر
+                 حقل نص حر لكتابة جنسية مخصّصة عند اختياره. -->
             <div class="field" data-field="nationality">
               <label>الجنسية <span class="req">*</span></label>
-              <input type="text" id="nationality" placeholder="مثال: عُماني" autocomplete="off">
+              <select id="nationality">
+                <option value="">اختر</option>
+                <option value="Omani">Omani</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+              <input type="text" id="nationality_other" placeholder="اكتب الجنسية" autocomplete="off" style="display:none; margin-top:8px;">
               <div class="error-msg">هذا الحقل مطلوب</div>
             </div>
 
