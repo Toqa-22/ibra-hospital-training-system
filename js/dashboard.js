@@ -630,25 +630,28 @@ async function handleEditStudent(record){
 // إرجاع سجل قسم واحد لطالب من لوحة الإدارة إلى قائمة الانتظار
 // ---------------------------------------------------------------------------
 /**
- * معالجة الضغط على زر «↩️ إرجاع لقائمة الانتظار»: تعرض نافذة تأكيد صريحة أولاً
- * (السجل يفقد تاريخي بداية/نهاية التدريب الحاليين ويختفي من لوحة الإدارة
- * فوراً بعد التأكيد، وينتقل لقائمة الانتظار waiting.html بدلاً من ذلك — راجع
- * returnStudentRecordToWaitlist() في js/supabase.js لتفاصيل التحديث)، ولا
- * تُنفّذ أي تعديل فعلي إلا بعد موافقة المستخدم. تعمل على سجل قسم واحد فقط
- * (وليس كل أقسام الطالب دفعة واحدة) — فطالب بعدة أقسام يمكن إرجاع بعضها
- * فقط لقائمة الانتظار مع إبقاء الباقي في لوحة الإدارة.
+ * معالجة الضغط على زر «↩️ إرجاع لقائمة الانتظار»: تطلب من المستخدم كتابة سبب
+ * الإرجاع إلزامياً أولاً (عبر showReasonPrompt في js/ui.js — لا نافذة تأكيد
+ * بسيطة بعد الآن، بل حقل نص لا يُقبل فارغاً)، ثم تُنفِّذ الإرجاع الفعلي.
+ * السبب المكتوب يُحفظ في waitlist_note ويظهر لاحقاً في حقل «ملاحظة» بنافذة
+ * «📅 تحديد الفترات ونقل الطالب» في صفحة قائمة الانتظار — راجع
+ * returnStudentRecordToWaitlist() في js/supabase.js لتفاصيل الحفظ. لا تُنفَّذ
+ * أي تعديل فعلي إلا بعد كتابة سبب فعلي. تعمل على سجل قسم واحد فقط (وليس كل
+ * أقسام الطالب دفعة واحدة) — فطالب بعدة أقسام يمكن إرجاع بعضها فقط لقائمة
+ * الانتظار مع إبقاء الباقي في لوحة الإدارة.
  * @param {object} record - سجل القسم الواحد المطلوب إرجاعه لقائمة الانتظار
  */
 async function handleReturnToWaitlist(record){
-  const confirmed = await showConfirm({
+  const reason = await showReasonPrompt({
     title: "إرجاع الطالب لقائمة الانتظار",
-    text: `سيتم إرجاع ${escapeHtml(record.student_name)} (${escapeHtml(record.department)}) إلى قائمة الانتظار، وسيُحذف تاريخا بداية ونهاية التدريب الحاليان لهذا القسم. يمكن تحديد فترة جديدة لاحقاً من صفحة قائمة الانتظار.`,
+    text: `سيتم إرجاع ${escapeHtml(record.student_name)} (${escapeHtml(record.department)}) إلى قائمة الانتظار، وسيُحذف تاريخا بداية ونهاية التدريب الحاليان لهذا القسم. يرجى كتابة سبب الإرجاع — سيظهر لاحقاً في صفحة قائمة الانتظار ويمكن تعديله من هناك.`,
+    placeholder: "سبب الإرجاع...",
     confirmLabel: "إرجاع لقائمة الانتظار",
   });
-  if (!confirmed) return;
+  if (!reason) return;
 
   try {
-    await returnStudentRecordToWaitlist(record.id);
+    await returnStudentRecordToWaitlist(record.id, reason);
 
     const idx = state.allStudents.findIndex(s => s.id === record.id);
     if (idx !== -1){
@@ -657,6 +660,7 @@ async function handleReturnToWaitlist(record){
         training_start: null,
         training_end: null,
         is_waitlist: true,
+        waitlist_note: reason,
       };
     }
 
