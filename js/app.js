@@ -13,8 +13,27 @@
 document.addEventListener("DOMContentLoaded", () => {
   initDeptPicker();
   bindTrainingModeToggle();
+  bindPlaceOfTrainingToggle();
   initFormSubmit();
 });
+
+/**
+ * ربط قائمة «مكان التدريب» المنسدلة بإظهار/إخفاء حقل نص حر بديل عند اختيار
+ * "أخرى" تحديداً — بقية الخيارات (طب / الإدارة) قيم ثابتة جاهزة فلا حاجة
+ * لأي حقل إضافي معها. الحقل البديل يُصفَّر تلقائياً عند التبديل بعيداً عن
+ * "أخرى" حتى لا تبقى قيمة قديمة مخفية تُرسَل خطأً لاحقاً.
+ */
+function bindPlaceOfTrainingToggle(){
+  const select = document.getElementById("place_of_training");
+  const otherInput = document.getElementById("place_of_training_other");
+
+  select.addEventListener("change", () => {
+    const isOther = select.value === "أخرى";
+    otherInput.style.display = isOther ? "block" : "none";
+    if (!isOther) otherInput.value = "";
+    clearFieldError("place_of_training");
+  });
+}
 
 // ---------------------------------------------------------------------------
 // منتقي الفئة → الأقسام (اختيار متعدد عبر فئة واحدة أو أكثر)
@@ -337,7 +356,10 @@ function validateForm(){
   const gender = document.getElementById("gender").value;
   const nationality = document.getElementById("nationality").value.trim();
   const yearOfStudy = document.getElementById("year_of_study").value.trim();
-  const placeOfTraining = document.getElementById("place_of_training").value.trim();
+  const placeOfTrainingSelect = document.getElementById("place_of_training").value;
+  const placeOfTraining = placeOfTrainingSelect === "أخرى"
+    ? document.getElementById("place_of_training_other").value.trim()
+    : placeOfTrainingSelect;
   const trainingType = document.getElementById("training_type").value;
   const academicStage = document.getElementById("academic_stage").value;
   const departments = Array.from(deptPickerState.selected);
@@ -470,6 +492,7 @@ function initFormSubmit(){
         b.classList.toggle("active", b.dataset.mode === "dated");
       });
       document.getElementById("waitlistNote").value = "";
+      document.getElementById("place_of_training_other").style.display = "none";
       renderCategoryCards();
       renderDeptChecklist();
       renderSelectedSummary();
