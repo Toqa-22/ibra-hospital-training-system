@@ -691,10 +691,31 @@ function setExcelCell(ws, r, c, v, opts){
  * @param {*} v - القيمة المطلوب كتابتها (تُكتب في الخلية الأولى فقط، والخلايا الباقية تبقى فارغة)
  * @param {object} [opts] - خيارات التنسيق، تُمرَّر مباشرة لـ styleExcelCell لكل خلية في النطاق
  */
+/**
+ * كتابة قيمة في نطاق خلايا مدموج أفقياً (صف واحد، من عمود بداية إلى عمود
+ * نهاية)، ودمج النطاق فعلياً، مع تطبيق نفس التنسيق (توسيط أفقي ورأسي...) على
+ * كل خلية داخل النطاق وليس فقط الخلية الأولى (العليا اليمنى) — بعض برامج
+ * الجداول غير Excel (مثل LibreOffice أو Google Sheets) لا تُطبِّق محاذاة
+ * الخلية الأولى تلقائياً على كامل النطاق المدموج، فهذا يضمن ظهور العنوان
+ * مُوسَّطاً أفقياً ورأسياً بشكل صحيح في كل البرامج.
+ *
+ * تنبيه مهم: القيمة (value) تُكتب في خلية المرساة (الأولى) فقط — لا تُكتب أي
+ * قيمة (ولو نص فارغ "") في بقية خلايا النطاق المدموج، فهذا يُفسد الدمج نفسه
+ * في ExcelJS ويُخفي المحتوى بالكامل (كان هذا سبب اختفاء العنوان وعمود
+ * "المؤسسة التعليمية" سابقاً). التنسيق (الخط/الحدود/التعبئة) فقط يُطبَّق على
+ * بقية الخلايا، دون أي قيمة.
+ * @param {import('exceljs').Worksheet} ws
+ * @param {number} r - رقم الصف
+ * @param {number} cStart - أول عمود في النطاق
+ * @param {number} cEnd - آخر عمود في النطاق
+ * @param {*} v - القيمة المطلوب كتابتها في خلية المرساة فقط
+ * @param {object} [opts] - خيارات التنسيق، تُمرَّر مباشرة لـ styleExcelCell لكل خلية في النطاق
+ */
 function setMergedExcelRange(ws, r, cStart, cEnd, v, opts){
   ws.mergeCells(r, cStart, r, cEnd);
-  for (let c = cStart; c <= cEnd; c++){
-    setExcelCell(ws, r, c, c === cStart ? v : "", opts);
+  setExcelCell(ws, r, cStart, v, opts);
+  for (let c = cStart + 1; c <= cEnd; c++){
+    styleExcelCell(ws.getCell(r, c), opts); // تنسيق فقط، بلا أي كتابة قيمة
   }
 }
 
@@ -873,7 +894,7 @@ const KASHF3_HEADERS = [
   { label: "عدد الأيام", col: 13, span: 1 },
   { label: "التكلفة\n(إن وجدت)", col: 14, span: 1 },
 ];
-const KASHF3_COLUMN_WIDTHS = [7, 32, 12, 18, 20, 20, 28, 20, 28, 18, 18, 14, 12, 14]; // A إلى N بالترتيب — عريضة للنصوص الطويلة بسطر واحد؛ العمودان H وN أضيق عمداً لأن عنوانيهما مقسَّمان على سطرين
+const KASHF3_COLUMN_WIDTHS = [7, 34, 13, 19, 22, 22, 30, 22, 30, 19, 19, 15, 13, 16]; // A إلى N بالترتيب — عريضة للنصوص الطويلة بسطر واحد؛ العمودان H وN أضيق عمداً لأن عنوانيهما مقسَّمان على سطرين
 const KASHF3_TOTAL_COLS = 14; // A..N
 
 /**
@@ -932,7 +953,7 @@ async function exportKashf3Report(){
 
     // -------- صف 2: العنوان الكامل، مدموج عبر كل الأعمدة (A-N)، بلا التفاف
     //          (سطر واحد فقط) بفضل العرض الإجمالي الكبير لكل الأعمدة مجتمعة --------
-    setMergedExcelRange(ws, 2, 1, KASHF3_TOTAL_COLS, KASHF3_TITLE, { bold: true, sz: 13, align: "center", valign: "middle", fill: KASHF3_HEADER_FILL, wrap: false });
+    setMergedExcelRange(ws, 2, 1, KASHF3_TOTAL_COLS, KASHF3_TITLE, { bold: true, sz: 14, align: "center", valign: "middle", fill: KASHF3_HEADER_FILL, wrap: false });
     ws.getRow(2).height = 32;
 
     // -------- صف 3: فارغ عمداً (فاصل بصري بين العنوان وجدول البيانات) --------
@@ -947,7 +968,7 @@ async function exportKashf3Report(){
     const TWO_LINE_HEADER_COLS = [8, 14];
     KASHF3_HEADERS.forEach(h => {
       const headerOpts = {
-        bold: true, sz: 12, align: "center", valign: "middle", fill: KASHF3_HEADER_FILL,
+        bold: true, sz: 14, align: "center", valign: "middle", fill: KASHF3_HEADER_FILL,
         wrap: TWO_LINE_HEADER_COLS.includes(h.col),
       };
       if (h.span > 1){
@@ -956,7 +977,7 @@ async function exportKashf3Report(){
         setExcelCell(ws, HEADER_ROW, h.col, h.label, headerOpts);
       }
     });
-    ws.getRow(HEADER_ROW).height = 42;
+    ws.getRow(HEADER_ROW).height = 46;
 
     // -------- الصفوف 5 فما فوق: سجل واحد مسطّح لكل التحاق تدريب فعلي --------
     // كل الخلايا: محاذاة أفقية ورأسية في المنتصف تماماً، وبلا التفاف نص (سطر
@@ -968,16 +989,14 @@ async function exportKashf3Report(){
       const workingDays = calcDurationDays(r.training_start, r.training_end);
       const weeks = Math.floor(workingDays / 5);
       const remainingDays = workingDays % 5;
-      const cellOpts = { align: "center", valign: "middle", wrap: false };
+      const cellOpts = { align: "center", valign: "middle", wrap: false, sz: 14 };
 
       setExcelCell(ws, row, 1, i + 1, cellOpts);
       setExcelCell(ws, row, 2, r.student_name || "", cellOpts);
       setExcelCell(ws, row, 3, r.gender || "", cellOpts);
       setExcelCell(ws, row, 4, r.nationality || "", cellOpts);
 
-      ws.mergeCells(row, 5, row, 6);
-      setExcelCell(ws, row, 5, r.college || "", cellOpts);
-      setExcelCell(ws, row, 6, "", cellOpts);
+      setMergedExcelRange(ws, row, 5, 6, r.college || "", cellOpts);
 
       setExcelCell(ws, row, 7, r.specialization || "", cellOpts);
       setExcelCell(ws, row, 8, r.academic_stage || "", cellOpts);
@@ -987,6 +1006,7 @@ async function exportKashf3Report(){
       setExcelCell(ws, row, 12, weeks, cellOpts);
       setExcelCell(ws, row, 13, remainingDays, cellOpts);
       setExcelCell(ws, row, 14, "", cellOpts);
+      ws.getRow(row).height = 22; // ارتفاع أكبر يلائم خط بحجم 14
     });
 
     const lastRow = HEADER_ROW + rows.length;
