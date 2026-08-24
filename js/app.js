@@ -14,8 +14,28 @@ document.addEventListener("DOMContentLoaded", () => {
   initDeptPicker();
   bindTrainingModeToggle();
   bindPlaceOfTrainingToggle();
+  bindNationalityToggle();
   initFormSubmit();
 });
+
+/**
+ * ربط قائمة «الجنسية» المنسدلة بإظهار/إخفاء حقل نص حر بديل عند اختيار
+ * "أخرى" تحديداً — خيار Omani قيمة ثابتة جاهزة فلا حاجة لأي حقل إضافي معه.
+ * الحقل البديل يُصفَّر تلقائياً عند التبديل بعيداً عن "أخرى" حتى لا تبقى
+ * قيمة قديمة مخفية تُرسَل خطأً لاحقاً. نفس نمط bindPlaceOfTrainingToggle
+ * أدناه تماماً.
+ */
+function bindNationalityToggle(){
+  const select = document.getElementById("nationality");
+  const otherInput = document.getElementById("nationality_other");
+
+  select.addEventListener("change", () => {
+    const isOther = select.value === "أخرى";
+    otherInput.style.display = isOther ? "block" : "none";
+    if (!isOther) otherInput.value = "";
+    clearFieldError("nationality");
+  });
+}
 
 /**
  * ربط قائمة «مكان التدريب» المنسدلة بإظهار/إخفاء حقل نص حر بديل عند اختيار
@@ -354,7 +374,10 @@ function validateForm(){
   const specialization = document.getElementById("specialization").value.trim();
   const college = document.getElementById("college").value.trim();
   const gender = document.getElementById("gender").value;
-  const nationality = document.getElementById("nationality").value.trim();
+  const nationalitySelect = document.getElementById("nationality").value;
+  const nationality = nationalitySelect === "أخرى"
+    ? document.getElementById("nationality_other").value.trim()
+    : nationalitySelect;
   const yearOfStudy = document.getElementById("year_of_study").value.trim();
   const placeOfTrainingSelect = document.getElementById("place_of_training").value;
   const placeOfTraining = placeOfTrainingSelect === "أخرى"
@@ -493,6 +516,7 @@ function initFormSubmit(){
       });
       document.getElementById("waitlistNote").value = "";
       document.getElementById("place_of_training_other").style.display = "none";
+      document.getElementById("nationality_other").style.display = "none";
       renderCategoryCards();
       renderDeptChecklist();
       renderSelectedSummary();
