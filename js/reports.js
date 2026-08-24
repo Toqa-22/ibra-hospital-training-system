@@ -846,7 +846,7 @@ const KASHF3_HEADERS = [
   { label: "عدد الأيام", col: 13, span: 1 },
   { label: "التكلفة (إن وجدت)", col: 14, span: 1 },
 ];
-const KASHF3_COLUMN_WIDTHS = [6, 24, 10, 14, 15, 15, 20, 20, 20, 15, 15, 12, 10, 16]; // A إلى N بالترتيب
+const KASHF3_COLUMN_WIDTHS = [6, 26, 10, 14, 16, 16, 22, 30, 22, 16, 16, 12, 10, 20]; // A إلى N بالترتيب — موسَّعة لضمان ظهور كل نص بسطر واحد
 const KASHF3_TOTAL_COLS = 14; // A..N
 
 /**
@@ -885,59 +885,73 @@ async function exportKashf3Report(){
       views: [{ rightToLeft: true, showGridLines: false }],
     });
 
-    // -------- صف 1: شعار المستشفى (بلا نص) --------
+    // -------- صف 1: شعار المستشفى فوق عمودي B وC تحديداً (وليس A) --------
     ws.getRow(1).height = 60;
     try {
       const logoBuffer = await loadExcelLogoBuffer();
       const imageId = wb.addImage({ buffer: logoBuffer, extension: "png" });
-      ws.addImage(imageId, { tl: { col: 0, row: 0.05 }, ext: { width: 62, height: 62 } });
+      ws.addImage(imageId, { tl: { col: 1, row: 0.05 }, ext: { width: 110, height: 55 } });
     } catch (logoErr){
       console.error("تعذر تضمين شعار المستشفى في كشف رقم 3:", logoErr);
       // نُكمل التصدير حتى بدون الشعار بدل إفشال العملية بالكامل
     }
 
-    // -------- صف 2: العنوان الكامل، مدموج عبر كل الأعمدة (A-N) --------
+    // -------- صف 2: العنوان الكامل، مدموج عبر كل الأعمدة (A-N)، بلا التفاف
+    //          (سطر واحد فقط) بفضل العرض الإجمالي الكبير لكل الأعمدة مجتمعة --------
     ws.mergeCells(2, 1, 2, KASHF3_TOTAL_COLS);
-    setExcelCell(ws, 2, 1, KASHF3_TITLE, { bold: true, sz: 13, align: "center", valign: "center", fill: KASHF3_HEADER_FILL });
+    setExcelCell(ws, 2, 1, KASHF3_TITLE, { bold: true, sz: 13, align: "center", valign: "center", fill: KASHF3_HEADER_FILL, wrap: false });
     ws.getRow(2).height = 32;
 
-    // -------- صف 3: عناوين الأعمدة (مع دمج E-F لعمود "المؤسسة التعليمية") --------
+    // -------- صف 3: فارغ عمداً (فاصل بصري بين العنوان وجدول البيانات) --------
+    ws.getRow(3).height = 10;
+
+    // -------- صف 4: عناوين الأعمدة (مع دمج E-F لعمود "المؤسسة التعليمية")،
+    //          بلا التفاف نص — الأعمدة مُوسَّعة أدناه لتستوعب كل عنوان بسطر واحد --------
+    const HEADER_ROW = 4;
     KASHF3_HEADERS.forEach(h => {
       if (h.span > 1){
-        ws.mergeCells(3, h.col, 3, h.col + h.span - 1);
+        ws.mergeCells(HEADER_ROW, h.col, HEADER_ROW, h.col + h.span - 1);
       }
-      setExcelCell(ws, 3, h.col, h.label, { bold: true, sz: 12, align: "center", valign: "center", fill: KASHF3_HEADER_FILL });
+      setExcelCell(ws, HEADER_ROW, h.col, h.label, { bold: true, sz: 12, align: "center", valign: "center", fill: KASHF3_HEADER_FILL, wrap: false });
     });
-    ws.getRow(3).height = 30;
+    ws.getRow(HEADER_ROW).height = 34;
 
-    // -------- الصفوف 4 فما فوق: سجل واحد مسطّح لكل التحاق تدريب فعلي --------
+    // -------- الصفوف 5 فما فوق: سجل واحد مسطّح لكل التحاق تدريب فعلي --------
+    // كل الخلايا: محاذاة أفقية ورأسية في المنتصف تماماً، وبلا التفاف نص (سطر
+    // واحد لكل خلية) — الأعمدة مُوسَّعة أدناه (KASHF3_COLUMN_WIDTHS) لتستوعب
+    // أطول محتوى متوقع (الاسم، الكلية، التخصص...) بسطر واحد دون قطع.
+    const DATA_START_ROW = HEADER_ROW + 1;
     rows.forEach((r, i) => {
-      const row = 4 + i;
+      const row = DATA_START_ROW + i;
       const workingDays = calcDurationDays(r.training_start, r.training_end);
       const weeks = Math.floor(workingDays / 5);
       const remainingDays = workingDays % 5;
+      const cellOpts = { align: "center", valign: "center", wrap: false };
 
-      setExcelCell(ws, row, 1, i + 1, { align: "center", valign: "center" });
-      setExcelCell(ws, row, 2, r.student_name || "", { align: "right", valign: "center" });
-      setExcelCell(ws, row, 3, r.gender || "", { align: "center", valign: "center" });
-      setExcelCell(ws, row, 4, r.nationality || "", { align: "center", valign: "center" });
+      setExcelCell(ws, row, 1, i + 1, cellOpts);
+      setExcelCell(ws, row, 2, r.student_name || "", cellOpts);
+      setExcelCell(ws, row, 3, r.gender || "", cellOpts);
+      setExcelCell(ws, row, 4, r.nationality || "", cellOpts);
 
       ws.mergeCells(row, 5, row, 6);
-      setExcelCell(ws, row, 5, r.college || "", { align: "right", valign: "center" });
+      setExcelCell(ws, row, 5, r.college || "", cellOpts);
 
-      setExcelCell(ws, row, 7, r.specialization || "", { align: "right", valign: "center" });
-      setExcelCell(ws, row, 8, r.academic_stage || "", { align: "center", valign: "center" });
-      setExcelCell(ws, row, 9, r.place_of_training || "", { align: "right", valign: "center" });
-      setExcelCell(ws, row, 10, formatDateShort(r.training_start), { align: "center", valign: "center" });
-      setExcelCell(ws, row, 11, formatDateShort(r.training_end), { align: "center", valign: "center" });
-      setExcelCell(ws, row, 12, weeks, { align: "center", valign: "center" });
-      setExcelCell(ws, row, 13, remainingDays, { align: "center", valign: "center" });
-      setExcelCell(ws, row, 14, "", { align: "center", valign: "center" });
+      setExcelCell(ws, row, 7, r.specialization || "", cellOpts);
+      setExcelCell(ws, row, 8, r.academic_stage || "", cellOpts);
+      setExcelCell(ws, row, 9, r.place_of_training || "", cellOpts);
+      setExcelCell(ws, row, 10, formatDateShort(r.training_start), cellOpts);
+      setExcelCell(ws, row, 11, formatDateShort(r.training_end), cellOpts);
+      setExcelCell(ws, row, 12, weeks, cellOpts);
+      setExcelCell(ws, row, 13, remainingDays, cellOpts);
+      setExcelCell(ws, row, 14, "", cellOpts);
     });
 
-    const lastRow = 3 + rows.length;
+    const lastRow = HEADER_ROW + rows.length;
 
     // -------- عرض الأعمدة، إعداد الصفحة، منطقة الطباعة --------
+    // الأعمدة مُوسَّعة عمداً (راجع KASHF3_COLUMN_WIDTHS) لضمان ظهور أطول نص
+    // متوقع في كل عمود (خصوصاً عنوان "المرحلة الدراسية (طالب - خريج)" والاسم
+    // والكلية والتخصص ومكان التدريب) بسطر واحد فقط دون التفاف أو قطع.
     ws.columns.forEach((col, idx) => { col.width = KASHF3_COLUMN_WIDTHS[idx]; });
 
     ws.pageSetup = {
@@ -950,7 +964,7 @@ async function exportKashf3Report(){
       horizontalCentered: true,
       printArea: `A1:${String.fromCharCode(64 + KASHF3_TOTAL_COLS)}${lastRow}`,
     };
-    ws.pageSetup.printTitlesRow = "3:3";
+    ws.pageSetup.printTitlesRow = `${HEADER_ROW}:${HEADER_ROW}`;
 
     await downloadExcelWorkbook(wb, "كشف رقم 3.xlsx");
     showToast("تم تصدير كشف رقم 3 بنجاح", "success");
