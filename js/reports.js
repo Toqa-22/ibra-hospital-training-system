@@ -80,6 +80,9 @@ function bindReportButtons(){
   document.getElementById("exportExcelBtn").addEventListener("click", () => {
     exportComprehensiveExcelReport();
   });
+  document.getElementById("exportKashf3Btn").addEventListener("click", () => {
+    exportKashf3Report();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -814,6 +817,146 @@ async function exportComprehensiveExcelReport(){
   } catch (err){
     console.error("فشل تصدير تقرير Excel الشامل:", err);
     showToast("تعذر تصدير ملف Excel، يرجى المحاولة مرة أخرى", "error");
+  } finally {
+    setButtonLoading(btn, false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// كشف رقم 3 (Excel): كشف بيانات الطلبة والخريجين والمتدربين من خارج الوزارة
+// ---------------------------------------------------------------------------
+// تخطيط أعمدة الشيت بالضبط كما في النموذج الرسمي المرجعي: 14 عمود (A-N)،
+// حيث عمودا E وF مدموجان معاً كعمود منطقي واحد "المؤسسة التعليمية". اللون
+// الأزرق الفاتح لصف العناوين هو نفس لون Excel القياسي "Blue, Accent 1,
+// Lighter 80%" (DDEBF7 في نظام ألوان Office الافتراضي).
+const KASHF3_HEADER_FILL = "FFDDEBF7";
+const KASHF3_TITLE = "كشف رقم 3 بيانات الطلبة والخريجين والمتدربين من خارج الوزارة الذين تم تدريبهم في مختلف مؤسسات وزارة الصحة";
+const KASHF3_HEADERS = [
+  { label: "م", col: 1, span: 1 },
+  { label: "اسم المتدرب", col: 2, span: 1 },
+  { label: "الجنس", col: 3, span: 1 },
+  { label: "الجنسية", col: 4, span: 1 },
+  { label: "المؤسسة التعليمية", col: 5, span: 2 }, // E-F مدموجان
+  { label: "التخصص", col: 7, span: 1 },
+  { label: "المرحلة الدراسية (طالب - خريج)", col: 8, span: 1 },
+  { label: "مكان التدريب", col: 9, span: 1 },
+  { label: "تاريخ بدء التدريب", col: 10, span: 1 },
+  { label: "تاريخ انتهاء التدريب", col: 11, span: 1 },
+  { label: "عدد الأسابيع", col: 12, span: 1 },
+  { label: "عدد الأيام", col: 13, span: 1 },
+  { label: "التكلفة (إن وجدت)", col: 14, span: 1 },
+];
+const KASHF3_COLUMN_WIDTHS = [6, 24, 10, 14, 15, 15, 20, 20, 20, 15, 15, 12, 10, 16]; // A إلى N بالترتيب
+const KASHF3_TOTAL_COLS = 14; // A..N
+
+/**
+ * جلب شعار المستشفى (assets/excel_logo.png) كـ ArrayBuffer تمهيداً لتضمينه
+ * داخل ملف Excel عبر workbook.addImage()؛ يُستدعى مرة واحدة فقط عند التصدير.
+ * @returns {Promise<ArrayBuffer>}
+ */
+async function loadExcelLogoBuffer(){
+  const res = await fetch("assets/excel_logo.png");
+  if (!res.ok) throw new Error("تعذر تحميل شعار المستشفى (assets/excel_logo.png)");
+  return res.arrayBuffer();
+}
+
+/**
+ * بناء وتنزيل «كشف رقم 3» بصيغة .xlsx حقيقية عبر ExcelJS: شعار المستشفى أعلى
+ * يمين الورقة، عنوان الكشف الكامل مدموج أسفله، ثم صف عناوين الأعمدة (بلون
+ * Blue, Accent 1, Lighter 80%)، ثم صف مستقل لكل سجل التحاق فعلي بتدريب ضمن
+ * الفترة المختارة (لا دمج رأسي لبيانات الطالب هنا — كشف مسطّح بسيط، سجل واحد
+ * لكل قسم/فترة تدريب كما في النموذج الرسمي المرجعي).
+ */
+async function exportKashf3Report(){
+  const { list, periodFrom, periodTo } = getFilteredReportStudents();
+  if (list.length === 0){
+    showToast("لا يوجد متدربون ضمن هذه الفترة", "warning");
+    return;
+  }
+
+  const btn = document.getElementById("exportKashf3Btn");
+  setButtonLoading(btn, true);
+
+  try {
+    const rows = list.slice().sort((a, b) => (a.training_start || "").localeCompare(b.training_start || ""));
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("كشف رقم 3", {
+      views: [{ rightToLeft: true, showGridLines: false }],
+    });
+
+    // -------- صف 1: شعار المستشفى (بلا نص) --------
+    ws.getRow(1).height = 60;
+    try {
+      const logoBuffer = await loadExcelLogoBuffer();
+      const imageId = wb.addImage({ buffer: logoBuffer, extension: "png" });
+      ws.addImage(imageId, { tl: { col: 0, row: 0.05 }, ext: { width: 62, height: 62 } });
+    } catch (logoErr){
+      console.error("تعذر تضمين شعار المستشفى في كشف رقم 3:", logoErr);
+      // نُكمل التصدير حتى بدون الشعار بدل إفشال العملية بالكامل
+    }
+
+    // -------- صف 2: العنوان الكامل، مدموج عبر كل الأعمدة (A-N) --------
+    ws.mergeCells(2, 1, 2, KASHF3_TOTAL_COLS);
+    setExcelCell(ws, 2, 1, KASHF3_TITLE, { bold: true, sz: 13, align: "center", valign: "center", fill: KASHF3_HEADER_FILL });
+    ws.getRow(2).height = 32;
+
+    // -------- صف 3: عناوين الأعمدة (مع دمج E-F لعمود "المؤسسة التعليمية") --------
+    KASHF3_HEADERS.forEach(h => {
+      if (h.span > 1){
+        ws.mergeCells(3, h.col, 3, h.col + h.span - 1);
+      }
+      setExcelCell(ws, 3, h.col, h.label, { bold: true, sz: 12, align: "center", valign: "center", fill: KASHF3_HEADER_FILL });
+    });
+    ws.getRow(3).height = 30;
+
+    // -------- الصفوف 4 فما فوق: سجل واحد مسطّح لكل التحاق تدريب فعلي --------
+    rows.forEach((r, i) => {
+      const row = 4 + i;
+      const workingDays = calcDurationDays(r.training_start, r.training_end);
+      const weeks = Math.floor(workingDays / 5);
+      const remainingDays = workingDays % 5;
+
+      setExcelCell(ws, row, 1, i + 1, { align: "center", valign: "center" });
+      setExcelCell(ws, row, 2, r.student_name || "", { align: "right", valign: "center" });
+      setExcelCell(ws, row, 3, r.gender || "", { align: "center", valign: "center" });
+      setExcelCell(ws, row, 4, r.nationality || "", { align: "center", valign: "center" });
+
+      ws.mergeCells(row, 5, row, 6);
+      setExcelCell(ws, row, 5, r.college || "", { align: "right", valign: "center" });
+
+      setExcelCell(ws, row, 7, r.specialization || "", { align: "right", valign: "center" });
+      setExcelCell(ws, row, 8, r.academic_stage || "", { align: "center", valign: "center" });
+      setExcelCell(ws, row, 9, r.place_of_training || "", { align: "right", valign: "center" });
+      setExcelCell(ws, row, 10, formatDateShort(r.training_start), { align: "center", valign: "center" });
+      setExcelCell(ws, row, 11, formatDateShort(r.training_end), { align: "center", valign: "center" });
+      setExcelCell(ws, row, 12, weeks, { align: "center", valign: "center" });
+      setExcelCell(ws, row, 13, remainingDays, { align: "center", valign: "center" });
+      setExcelCell(ws, row, 14, "", { align: "center", valign: "center" });
+    });
+
+    const lastRow = 3 + rows.length;
+
+    // -------- عرض الأعمدة، إعداد الصفحة، منطقة الطباعة --------
+    ws.columns.forEach((col, idx) => { col.width = KASHF3_COLUMN_WIDTHS[idx]; });
+
+    ws.pageSetup = {
+      orientation: "landscape",
+      paperSize: 9, // A4
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+      horizontalCentered: true,
+      printArea: `A1:${String.fromCharCode(64 + KASHF3_TOTAL_COLS)}${lastRow}`,
+    };
+    ws.pageSetup.printTitlesRow = "3:3";
+
+    await downloadExcelWorkbook(wb, "كشف رقم 3.xlsx");
+    showToast("تم تصدير كشف رقم 3 بنجاح", "success");
+  } catch (err){
+    console.error("فشل تصدير كشف رقم 3:", err);
+    showToast("تعذر تصدير كشف رقم 3، يرجى المحاولة مرة أخرى", "error");
   } finally {
     setButtonLoading(btn, false);
   }
