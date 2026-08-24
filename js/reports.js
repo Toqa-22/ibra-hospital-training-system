@@ -846,7 +846,7 @@ const KASHF3_HEADERS = [
   { label: "عدد الأيام", col: 13, span: 1 },
   { label: "التكلفة (إن وجدت)", col: 14, span: 1 },
 ];
-const KASHF3_COLUMN_WIDTHS = [6, 26, 10, 14, 16, 16, 22, 30, 22, 16, 16, 12, 10, 20]; // A إلى N بالترتيب — موسَّعة لضمان ظهور كل نص بسطر واحد
+const KASHF3_COLUMN_WIDTHS = [7, 32, 12, 18, 20, 20, 28, 38, 28, 18, 18, 14, 12, 24]; // A إلى N بالترتيب — موسَّعة جداً لضمان ظهور كل نص (حتى الجمل الطويلة) بسطر واحد كامل دون قطع
 const KASHF3_TOTAL_COLS = 14; // A..N
 
 /**
@@ -885,12 +885,19 @@ async function exportKashf3Report(){
       views: [{ rightToLeft: true, showGridLines: false }],
     });
 
-    // -------- صف 1: شعار المستشفى فوق عمودي B وC تحديداً (وليس A) --------
-    ws.getRow(1).height = 60;
+    // -------- صف 1: شعار المستشفى — مدموج داخل الخليتين B وC معاً تحديداً
+    //          (وليس A، وليس عائماً بلا خلية مرجعية)، والصورة مثبَّتة داخل
+    //          حدود هذا الدمج بالضبط. --------
+    ws.getRow(1).height = 62;
+    ws.mergeCells(1, 2, 1, 3); // B1:C1
     try {
       const logoBuffer = await loadExcelLogoBuffer();
       const imageId = wb.addImage({ buffer: logoBuffer, extension: "png" });
-      ws.addImage(imageId, { tl: { col: 1, row: 0.05 }, ext: { width: 110, height: 55 } });
+      ws.addImage(imageId, {
+        tl: { col: 1, row: 0 },
+        br: { col: 3, row: 1 },
+        editAs: "oneCell",
+      });
     } catch (logoErr){
       console.error("تعذر تضمين شعار المستشفى في كشف رقم 3:", logoErr);
       // نُكمل التصدير حتى بدون الشعار بدل إفشال العملية بالكامل
