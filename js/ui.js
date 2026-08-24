@@ -113,6 +113,80 @@ function showConfirm({ title = "تأكيد العملية", text = "", confirmLa
   });
 }
 
+// -------- نافذة إدخال نص إلزامي (مثل سبب إرجاع طالب لقائمة الانتظار) --------
+/**
+ * التأكد من وجود نافذة "إدخال نص إلزامي" في الصفحة، وإنشاؤها إن لم تكن
+ * موجودة بعد. تُستخدم داخلياً من showReasonPrompt() فقط.
+ * @returns {HTMLElement} عنصر الطبقة الخلفية (overlay) لهذه النافذة
+ */
+function ensureReasonPromptModal(){
+  let overlay = document.querySelector(".reason-prompt-modal-overlay");
+  if (!overlay){
+    overlay = document.createElement("div");
+    overlay.className = "modal-overlay reason-prompt-modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal-box reason-prompt-box">
+        <h4 class="m-title"></h4>
+        <p class="m-text"></p>
+        <textarea class="reason-input" rows="3" maxlength="300"></textarea>
+        <p class="e-error"></p>
+        <div class="modal-actions">
+          <button class="m-cancel">إلغاء</button>
+          <button class="m-confirm">تأكيد</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+  return overlay;
+}
+
+/**
+ * عرض نافذة تطلب من المستخدم كتابة نص إلزامي (مثل سبب إرجاع طالب لقائمة
+ * الانتظار) قبل تنفيذ إجراء ما — لا يُقبل التأكيد بنص فارغ، وتظهر رسالة خطأ
+ * أسفل الحقل عند المحاولة بلا كتابة شيء.
+ * @param {{title?:string, text?:string, placeholder?:string, confirmLabel?:string}} [options]
+ * @returns {Promise<string|null>} النص المُدخَل (مقصوص من الفراغات الطرفية) عند التأكيد، أو null عند الإلغاء
+ */
+function showReasonPrompt({ title = "", text = "", placeholder = "", confirmLabel = "تأكيد" } = {}){
+  return new Promise(resolve => {
+    const overlay = ensureReasonPromptModal();
+    const input = overlay.querySelector(".reason-input");
+    const errorEl = overlay.querySelector(".e-error");
+
+    overlay.querySelector(".m-title").textContent = title;
+    overlay.querySelector(".m-text").textContent = text;
+    overlay.querySelector(".m-confirm").textContent = confirmLabel;
+    input.value = "";
+    input.placeholder = placeholder;
+    errorEl.textContent = "";
+    errorEl.classList.remove("show");
+    overlay.classList.add("show");
+
+    const cancelBtn2 = overlay.querySelector(".m-cancel");
+    const confirmBtn2 = overlay.querySelector(".m-confirm");
+
+    const cleanup = (result) => {
+      overlay.classList.remove("show");
+      cancelBtn2.removeEventListener("click", onCancel);
+      confirmBtn2.removeEventListener("click", onConfirm);
+      resolve(result);
+    };
+    const onCancel = () => cleanup(null);
+    const onConfirm = () => {
+      const value = input.value.trim();
+      if (!value){
+        errorEl.textContent = "يرجى كتابة السبب أولاً";
+        errorEl.classList.add("show");
+        return;
+      }
+      cleanup(value);
+    };
+
+    cancelBtn2.addEventListener("click", onCancel);
+    confirmBtn2.addEventListener("click", onConfirm);
+  });
+}
+
 // -------- نافذة تعديل بيانات متدرب (سجل واحد) --------
 /**
  * التأكد من وجود نافذة تعديل بيانات المتدرب في الصفحة، وإنشاؤها بكل حقولها
@@ -354,13 +428,15 @@ function ensureAssignPeriodsModal(){
  * الطالب معاً عند الحفظ (الملاحظة تخص الطالب نفسه، وليست لكل قسم على حدة).
  *
  * زران منفصلان تماماً (وليس زر واحد يجمع العمليتين):
- *   - «حفظ»: يحفظ الفترات (والملاحظة) في قاعدة البيانات فقط، ويُبقي الطالب
- *     في قائمة الانتظار (is_waitlist لا يتغيّر). يمكن إعادة فتح نفس النافذة
+ *   - «حفظ»: لا يتطلب تحديد فترة صحيحة لكل قسم — يكفي كتابة ملاحظة (سبب
+ *     التأخير، تحديث حالة...) لقبول الحفظ حتى بلا أي تاريخ. يحفظ الفترات
+ *     (كما هي، محددة أو فارغة) والملاحظة في قاعدة البيانات، ويُبقي الطالب في
+ *     قائمة الانتظار (is_waitlist لا يتغيّر). يمكن إعادة فتح نفس النافذة
  *     لاحقاً فتظهر القيم المحفوظة تماماً.
- *   - «نقل إلى لوحة الإدارة»: يستخدم نفس الفترات المعروضة حالياً في النموذج
+ *   - «نقل إلى لوحة الإدارة»: يفرض تحديد فترة صحيحة لكل قسم (النقل الفعلي
+ *     يتطلب تواريخ حقيقية)، ويستخدم نفس الفترات المعروضة حالياً في النموذج
  *     (سواء كانت محفوظة مسبقاً أو أُدخلت للتو دون ضغط حفظ أولاً) وينقل الطالب
  *     فعلياً (is_waitlist=false) — هذا الزر فقط هو المسؤول عن النقل.
- * كلا الزرين يفرضان تحديد فترة صحيحة لكل قسم قبل القبول.
  * @param {{student_name:string, phone:string, records:Array}} group - مجموعة سجلات الطالب في قائمة الانتظار (سجل واحد لكل قسم)
  * @returns {Promise<{action:"save"|"transfer", updates:Array<{id:string, training_start:string, training_end:string, waitlist_note:string}>}|null>} نتيجة العملية المختارة، أو null عند الإلغاء
  */
@@ -459,9 +535,9 @@ function showAssignMultiPeriodModal(group){
     const onCancel = () => cleanup(null);
 
     /**
-     * يتحقق من صحة فترة كل قسم ويبني مصفوفة التحديثات المشتركة بين زري
-     * «حفظ» و«نقل إلى لوحة الإدارة» — نفس منطق التحقق تماماً لكليهما، فقط
-     * الإجراء الذي يُتخذ بالنتيجة (حفظ فقط أو حفظ+نقل) يختلف بين المستدعيَين.
+     * يتحقق من صحة فترة كل قسم ويبني مصفوفة التحديثات — تُستخدم حصرياً من
+     * زر «نقل إلى لوحة الإدارة» أدناه (النقل الفعلي يتطلب فترة صحيحة لكل
+     * قسم). زر «حفظ» له مسار مستقل أخف (onSave أدناه) لا يفرض هذا الشرط.
      * @returns {Array|null} مصفوفة التحديثات إن كانت كل الفترات صحيحة، أو null
      */
     const collectValidUpdates = () => {
@@ -490,8 +566,21 @@ function showAssignMultiPeriodModal(group){
     };
 
     const onSave = () => {
-      const updates = collectValidUpdates();
-      if (!updates) return;
+      // «حفظ» لا يتطلب فترة تدريب صحيحة لكل قسم — يكفي كتابة ملاحظة فقط
+      // (مثلاً سبب التأخير أو أي تحديث آخر) دون الحاجة لتحديد التواريخ الآن.
+      // التحقق الصارم من الفترات مطلوب فقط عند «نقل إلى لوحة الإدارة» أدناه.
+      const noteValue = noteEl.value.trim();
+      if (!noteValue){
+        errorEl.textContent = "يرجى كتابة ملاحظة قبل الحفظ";
+        errorEl.classList.add("show");
+        return;
+      }
+      errorEl.classList.remove("show");
+
+      const updates = group.records.map(r => {
+        const d = localDates.get(r.id) || {};
+        return { id: r.id, training_start: d.start || null, training_end: d.end || null, waitlist_note: noteValue };
+      });
       cleanup({ action: "save", updates });
     };
     const onTransfer = () => {
