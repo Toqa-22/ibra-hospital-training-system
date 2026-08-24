@@ -173,6 +173,14 @@ function ensureEditModal(){
               <option value="تدريب تطوعي">تدريب تطوعي</option>
             </select>
           </div>
+          <div class="e-field">
+            <label>المرحلة الدراسية (طالب - خريج)</label>
+            <select class="e-academic-stage">
+              <option value="">اختر</option>
+              <option value="طالب">طالب</option>
+              <option value="خريج">خريج</option>
+            </select>
+          </div>
           <div class="e-field full">
             <label>القسم</label>
             <select class="e-dept"></select>
@@ -224,6 +232,7 @@ function showEditStudentModal(record, options = {}){
     const yearInput = overlay.querySelector(".e-year");
     const placeInput = overlay.querySelector(".e-place");
     const trainingTypeSelect = overlay.querySelector(".e-training-type");
+    const academicStageSelect = overlay.querySelector(".e-academic-stage");
     const deptSelect = overlay.querySelector(".e-dept");
     const startInput = overlay.querySelector(".e-start");
     const endInput = overlay.querySelector(".e-end");
@@ -239,6 +248,7 @@ function showEditStudentModal(record, options = {}){
     yearInput.value = record.year_of_study || "";
     placeInput.value = record.place_of_training || "";
     trainingTypeSelect.value = record.training_type || "";
+    academicStageSelect.value = record.academic_stage || "";
     deptSelect.innerHTML = DEPARTMENTS.map(d => `<option value="${escapeHtml(d)}" ${d === record.department ? "selected" : ""}>${escapeHtml(d)}</option>`).join("");
     startInput.value = record.training_start || "";
     endInput.value = record.training_end || "";
@@ -268,11 +278,12 @@ function showEditStudentModal(record, options = {}){
       const year_of_study = yearInput.value.trim();
       const place_of_training = placeInput.value.trim();
       const training_type = trainingTypeSelect.value;
+      const academic_stage = academicStageSelect.value;
       const department = deptSelect.value;
       const training_start = startInput.value;
       const training_end = endInput.value;
 
-      if (!student_name || !phone || !specialization || !gender || !nationality || !year_of_study || !place_of_training || !training_type || !department || !training_start || !training_end){
+      if (!student_name || !phone || !specialization || !gender || !nationality || !year_of_study || !place_of_training || !training_type || !academic_stage || !department || !training_start || !training_end){
         errorEl.textContent = "يرجى تعبئة جميع الحقول المطلوبة";
         errorEl.classList.add("show");
         return;
@@ -288,7 +299,7 @@ function showEditStudentModal(record, options = {}){
         return;
       }
 
-      cleanup({ student_name, phone, college, specialization, gender, nationality, year_of_study, place_of_training, training_type, department, training_start, training_end });
+      cleanup({ student_name, phone, college, specialization, gender, nationality, year_of_study, place_of_training, training_type, academic_stage, department, training_start, training_end });
     };
 
     cancelBtn.addEventListener("click", onCancel);
