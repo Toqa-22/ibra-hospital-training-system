@@ -787,6 +787,8 @@ select:focus-visible,
 /* ============ نافذة تعديل بيانات المتدرب ============ */
 .edit-modal-box{
   max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
   text-align: right;
 }
 .edit-modal-box .m-title{ text-align:center; margin-bottom:18px; }
@@ -838,6 +840,8 @@ select:focus-visible,
 /* ============ نافذة تحديد فترات التدريب لعدة أقسام (قائمة الانتظار) ============ */
 .assign-periods-box{
   max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
   text-align: right;
 }
 .assign-periods-box .m-title{ text-align:center; margin-bottom:14px; }
