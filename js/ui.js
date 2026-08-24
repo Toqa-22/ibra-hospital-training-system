@@ -174,7 +174,7 @@ function ensureEditModal(){
             </select>
           </div>
           <div class="e-field">
-            <label>المرحلة الدراسية (طالب - خريج)</label>
+            <label>المرحلة الدراسية</label>
             <select class="e-academic-stage">
               <option value="">اختر</option>
               <option value="طالب">طالب</option>
