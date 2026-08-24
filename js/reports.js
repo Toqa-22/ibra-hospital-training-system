@@ -671,6 +671,28 @@ function setExcelCell(ws, r, c, v, opts){
 }
 
 /**
+ * كتابة قيمة في نطاق خلايا مدموج أفقياً (صف واحد، من عمود بداية إلى عمود
+ * نهاية)، ودمج النطاق فعلياً، مع تطبيق نفس التنسيق (توسيط أفقي ورأسي...) على
+ * كل خلية داخل النطاق وليس فقط الخلية الأولى (العليا اليمنى) — بعض برامج
+ * الجداول غير Excel (مثل LibreOffice أو Google Sheets) لا تُطبِّق محاذاة
+ * الخلية الأولى تلقائياً على كامل النطاق المدموج، فهذا يضمن ظهور العنوان
+ * مُوسَّطاً أفقياً ورأسياً بشكل صحيح في كل البرامج. تُستخدم لعنوان التقرير
+ * (صف كامل مدموج) ولعنوان "المؤسسة التعليمية" المدموج (عمودان).
+ * @param {import('exceljs').Worksheet} ws
+ * @param {number} r - رقم الصف
+ * @param {number} cStart - أول عمود في النطاق
+ * @param {number} cEnd - آخر عمود في النطاق
+ * @param {*} v - القيمة المطلوب كتابتها (تُكتب في الخلية الأولى فقط، والخلايا الباقية تبقى فارغة)
+ * @param {object} [opts] - خيارات التنسيق، تُمرَّر مباشرة لـ styleExcelCell لكل خلية في النطاق
+ */
+function setMergedExcelRange(ws, r, cStart, cEnd, v, opts){
+  ws.mergeCells(r, cStart, r, cEnd);
+  for (let c = cStart; c <= cEnd; c++){
+    setExcelCell(ws, r, c, c === cStart ? v : "", opts);
+  }
+}
+
+/**
  * تنزيل ملف Workbook فعلياً كملف .xlsx حقيقي عبر Blob ورابط تنزيل مؤقت.
  * @param {import('exceljs').Workbook} wb
  * @param {string} filename - اسم الملف الناتج (بامتداد .xlsx)
@@ -740,8 +762,7 @@ async function exportComprehensiveExcelReport(){
     const colCount = EXCEL_HEADERS.length;
 
     // -------- صف 1: العنوان، مدموج عبر كل الأعمدة --------
-    ws.mergeCells(1, 1, 1, colCount);
-    setExcelCell(ws, 1, 1, "تقرير شامل للمتدربين", { bold: true, sz: 14, align: "center", valign: "center" });
+    setMergedExcelRange(ws, 1, 1, colCount, "تقرير شامل للمتدربين", { bold: true, sz: 14, align: "center", valign: "center" });
     ws.getRow(1).height = 28;
 
     // -------- صف 2: الترويسة --------
@@ -905,8 +926,7 @@ async function exportKashf3Report(){
 
     // -------- صف 2: العنوان الكامل، مدموج عبر كل الأعمدة (A-N)، بلا التفاف
     //          (سطر واحد فقط) بفضل العرض الإجمالي الكبير لكل الأعمدة مجتمعة --------
-    ws.mergeCells(2, 1, 2, KASHF3_TOTAL_COLS);
-    setExcelCell(ws, 2, 1, KASHF3_TITLE, { bold: true, sz: 13, align: "center", valign: "center", fill: KASHF3_HEADER_FILL, wrap: false });
+    setMergedExcelRange(ws, 2, 1, KASHF3_TOTAL_COLS, KASHF3_TITLE, { bold: true, sz: 13, align: "center", valign: "center", fill: KASHF3_HEADER_FILL, wrap: false });
     ws.getRow(2).height = 32;
 
     // -------- صف 3: فارغ عمداً (فاصل بصري بين العنوان وجدول البيانات) --------
@@ -916,10 +936,12 @@ async function exportKashf3Report(){
     //          بلا التفاف نص — الأعمدة مُوسَّعة أدناه لتستوعب كل عنوان بسطر واحد --------
     const HEADER_ROW = 4;
     KASHF3_HEADERS.forEach(h => {
+      const headerOpts = { bold: true, sz: 12, align: "center", valign: "center", fill: KASHF3_HEADER_FILL, wrap: false };
       if (h.span > 1){
-        ws.mergeCells(HEADER_ROW, h.col, HEADER_ROW, h.col + h.span - 1);
+        setMergedExcelRange(ws, HEADER_ROW, h.col, h.col + h.span - 1, h.label, headerOpts);
+      } else {
+        setExcelCell(ws, HEADER_ROW, h.col, h.label, headerOpts);
       }
-      setExcelCell(ws, HEADER_ROW, h.col, h.label, { bold: true, sz: 12, align: "center", valign: "center", fill: KASHF3_HEADER_FILL, wrap: false });
     });
     ws.getRow(HEADER_ROW).height = 34;
 
@@ -942,6 +964,7 @@ async function exportKashf3Report(){
 
       ws.mergeCells(row, 5, row, 6);
       setExcelCell(ws, row, 5, r.college || "", cellOpts);
+      setExcelCell(ws, row, 6, "", cellOpts);
 
       setExcelCell(ws, row, 7, r.specialization || "", cellOpts);
       setExcelCell(ws, row, 8, r.academic_stage || "", cellOpts);
