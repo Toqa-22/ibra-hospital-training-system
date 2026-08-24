@@ -339,6 +339,7 @@ function validateForm(){
   const yearOfStudy = document.getElementById("year_of_study").value.trim();
   const placeOfTraining = document.getElementById("place_of_training").value.trim();
   const trainingType = document.getElementById("training_type").value;
+  const academicStage = document.getElementById("academic_stage").value;
   const departments = Array.from(deptPickerState.selected);
 
   [
@@ -351,6 +352,7 @@ function validateForm(){
     ["year_of_study", yearOfStudy.length > 0],
     ["place_of_training", placeOfTraining.length > 0],
     ["training_type", trainingType.length > 0],
+    ["academic_stage", academicStage.length > 0],
     ["department", departments.length > 0],
   ].forEach(([field, ok]) => {
     if (ok) clearFieldError(field); else { setFieldError(field); valid = false; }
@@ -389,7 +391,7 @@ function validateForm(){
     return { department: dep, start: d.start, end: d.end, waitlist: false };
   });
 
-  return { name, phone, specialization, college, gender, nationality, yearOfStudy, placeOfTraining, trainingType, items };
+  return { name, phone, specialization, college, gender, nationality, yearOfStudy, placeOfTraining, trainingType, academicStage, items };
 }
 
 // ---------------------------------------------------------------------------
@@ -437,6 +439,7 @@ function initFormSubmit(){
         year_of_study: values.yearOfStudy,
         place_of_training: values.placeOfTraining,
         training_type: values.trainingType,
+        academic_stage: values.academicStage,
       };
 
       // تقسيم الأقسام المختارة إلى مجموعتين: أقسام بفترة محددة (تُدرج مباشرة
