@@ -77,9 +77,6 @@ function bindReportButtons(){
   document.getElementById("printDetailedReportBtn").addEventListener("click", () => {
     printDetailedReport();
   });
-  document.getElementById("exportExcelBtn").addEventListener("click", () => {
-    exportComprehensiveExcelReport();
-  });
   document.getElementById("exportKashf3Btn").addEventListener("click", () => {
     exportKashf3Report();
   });
@@ -589,30 +586,8 @@ function printDetailedReport(){
 }
 
 // ---------------------------------------------------------------------------
-// التقرير الخامس: تصدير Excel شامل (ExcelJS، ملف .xlsx حقيقي)
+// تصدير Excel (ExcelJS، ملف .xlsx حقيقي) — دوال وثوابت مشتركة
 // ---------------------------------------------------------------------------
-// عناوين الأعمدة الثلاث عشرة بالترتيب الدقيق المطلوب. ملاحظة: الجنسية
-// والمرحلة الدراسية ومكان التدريب لا تزال بلا مصدر بيانات في جدول students
-// حالياً (لم تُضَف هذه الحقول بعد لنموذج التسجيل)، فتظهر خلاياها فارغة إلى
-// حين إضافتها لاحقاً — بقية الأعمدة مبنية بالكامل من بيانات حقيقية، بما فيها
-// «مدة التدريب» الأخيرة (محسوبة بأيام العمل فقط عبر calcDurationDays/
-// formatDurationLabel — نفس حساب لوحة الإدارة تماماً، لا تكرار منطق).
-const EXCEL_HEADERS = [
-  "اسم الطالب",
-  "رقم الهاتف",
-  "التخصص",
-  "الكلية / الجامعة",
-  "الجنس",
-  "الجنسية",
-  "المرحلة الدراسية",
-  "مكان التدريب",
-  "نوع التدريب",
-  "الفئة",
-  "القسم",
-  "الفترة التدريبية لكل قسم",
-  "مدة التدريب",
-];
-const EXCEL_COLUMN_WIDTHS = [26, 16, 24, 26, 14, 16, 18, 24, 18, 16, 22, 26, 18];
 const EXCEL_THIN_BLACK_BORDER = {
   top: { style: "thin", color: { argb: "FF000000" } },
   left: { style: "thin", color: { argb: "FF000000" } },
@@ -762,114 +737,6 @@ function groupStudentsForExcel(list){
   });
 }
 
-/**
- * بناء وتنزيل «تقرير شامل للمتدربين» بصيغة .xlsx حقيقية عبر ExcelJS: صف
- * عنوان مدموج، صف ترويسة رمادية، ثم مجموعة صفوف لكل طالب بعدد أقسامه —
- * بيانات الطالب الأساسية (الاسم، الهاتف، التخصص...) تُدمج رأسياً وتُوسَّط
- * عمودياً عبر كل صفوفه، بينما القسم والفترة يظهران في صف مستقل لكل قسم.
- */
-async function exportComprehensiveExcelReport(){
-  const { list, periodFrom, periodTo } = getFilteredReportStudents();
-  if (list.length === 0){
-    showToast("لا يوجد متدربون ضمن هذه الفترة", "warning");
-    return;
-  }
-
-  const btn = document.getElementById("exportExcelBtn");
-  setButtonLoading(btn, true);
-
-  try {
-    const groups = groupStudentsForExcel(list);
-
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("تقرير شامل للمتدربين", {
-      views: [{ rightToLeft: true, showGridLines: false }],
-    });
-
-    const colCount = EXCEL_HEADERS.length;
-
-    // -------- صف 1: العنوان، مدموج عبر كل الأعمدة --------
-    setMergedExcelRange(ws, 1, 1, colCount, "تقرير شامل للمتدربين", { bold: true, sz: 14, align: "center", valign: "middle" });
-    ws.getRow(1).height = 28;
-
-    // -------- صف 2: الترويسة --------
-    EXCEL_HEADERS.forEach((label, idx) => {
-      setExcelCell(ws, 2, idx + 1, label, { bold: true, sz: 12, align: "center", valign: "middle", fill: "FFD9D9D9" });
-    });
-    ws.getRow(2).height = 22;
-
-    // -------- الصفوف 3 فما فوق: بيانات كل طالب --------
-    let currentRow = 3;
-    groups.forEach(group => {
-      const startRow = currentRow;
-      const endRow = startRow + group.records.length - 1;
-      const first = group.records[0];
-      const category = findCategoryForDepartment((first.department || "").trim());
-
-      const baseValues = [
-        first.student_name || "",
-        first.phone || "",
-        first.specialization || "",
-        first.college || "",
-        first.gender || "",
-        "", // الجنسية — بلا مصدر بيانات بعد
-        "", // المرحلة الدراسية — بلا مصدر بيانات بعد
-        "", // مكان التدريب — بلا مصدر بيانات بعد
-        first.training_type || "",
-        (category && category.name) || "",
-      ];
-
-      baseValues.forEach((value, colIdx) => {
-        const col = colIdx + 1;
-        if (group.records.length > 1){
-          ws.mergeCells(startRow, col, endRow, col);
-        }
-        setExcelCell(ws, startRow, col, value, { align: colIdx === 0 || colIdx === 2 || colIdx === 3 ? "right" : "center", valign: "middle" });
-      });
-
-      group.records.forEach((r, i) => {
-        const row = startRow + i;
-        const periodLabel = (r.training_start && r.training_end)
-          ? `${formatDateShort(r.training_start)} - ${formatDateShort(r.training_end)}`
-          : "—";
-        const durationLabel = (r.training_start && r.training_end)
-          ? formatDurationLabel(calcDurationDays(r.training_start, r.training_end))
-          : "—";
-        setExcelCell(ws, row, 11, r.department || "", { align: "right", valign: "middle" });
-        setExcelCell(ws, row, 12, periodLabel, { align: "center", valign: "middle" });
-        setExcelCell(ws, row, 13, durationLabel, { align: "center", valign: "middle" });
-      });
-
-      currentRow = endRow + 1;
-    });
-
-    const lastRow = currentRow - 1;
-
-    // -------- عرض الأعمدة، إعداد الصفحة، منطقة الطباعة، تكرار الترويسة --------
-    ws.columns.forEach((col, idx) => { col.width = EXCEL_COLUMN_WIDTHS[idx]; });
-
-    ws.pageSetup = {
-      orientation: "landscape",
-      paperSize: 9, // A4
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 0,
-      margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
-      horizontalCentered: true,
-      printArea: `A1:${String.fromCharCode(64 + colCount)}${lastRow}`,
-    };
-    ws.pageSetup.printTitlesRow = "2:2";
-
-    await downloadExcelWorkbook(wb, "تقرير شامل للمتدربين.xlsx");
-    showToast("تم تصدير ملف Excel بنجاح", "success");
-  } catch (err){
-    console.error("فشل تصدير تقرير Excel الشامل:", err);
-    showToast("تعذر تصدير ملف Excel، يرجى المحاولة مرة أخرى", "error");
-  } finally {
-    setButtonLoading(btn, false);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // كشف رقم 3 (Excel): كشف بيانات الطلبة والخريجين والمتدربين من خارج الوزارة
 // ---------------------------------------------------------------------------
@@ -911,9 +778,9 @@ async function loadExcelLogoBuffer(){
 /**
  * بناء وتنزيل «كشف رقم 3» بصيغة .xlsx حقيقية عبر ExcelJS: شعار المستشفى أعلى
  * يمين الورقة، عنوان الكشف الكامل مدموج أسفله، ثم صف عناوين الأعمدة (بلون
- * Blue, Accent 1, Lighter 80%)، ثم صف مستقل لكل سجل التحاق فعلي بتدريب ضمن
- * الفترة المختارة (لا دمج رأسي لبيانات الطالب هنا — كشف مسطّح بسيط، سجل واحد
- * لكل قسم/فترة تدريب كما في النموذج الرسمي المرجعي).
+ * Blue, Accent 1, Lighter 80%)، ثم صف واحد فقط لكل طالب فريد ضمن الفترة
+ * المختارة (لا تكرار — طالب التحق بأكثر من قسم يظهر مرة واحدة فقط، وعدد
+ * الأسابيع/الأيام هو مجموع كل فتراته التدريبية مجتمعة).
  */
 async function exportKashf3Report(){
   const { list, periodFrom, periodTo } = getFilteredReportStudents();
@@ -979,37 +846,53 @@ async function exportKashf3Report(){
     });
     ws.getRow(HEADER_ROW).height = 46;
 
-    // -------- الصفوف 5 فما فوق: سجل واحد مسطّح لكل التحاق تدريب فعلي --------
+    // -------- الصفوف 5 فما فوق: صف واحد لكل طالب فريد (بلا تكرار) — تاريخا
+    //          البداية/النهاية المعروضان هما أقدم بداية وأحدث نهاية بين كل
+    //          فترات تدريبه (قد يكون التحق بأكثر من قسم)، وعدد الأسابيع/الأيام
+    //          هو مجموع أيام العمل الفعلية عبر كل فتراته مجتمعة (وليس الفرق
+    //          بين أقدم بداية وأحدث نهاية، تجنّباً لاحتساب أي فجوة بين فترتين). --------
     // كل الخلايا: محاذاة أفقية ورأسية في المنتصف تماماً، وبلا التفاف نص (سطر
     // واحد لكل خلية) — الأعمدة مُوسَّعة أدناه (KASHF3_COLUMN_WIDTHS) لتستوعب
     // أطول محتوى متوقع (الاسم، الكلية، التخصص...) بسطر واحد دون قطع.
     const DATA_START_ROW = HEADER_ROW + 1;
-    rows.forEach((r, i) => {
+    const studentGroups = groupStudentsForExcel(rows);
+
+    studentGroups.forEach((group, i) => {
       const row = DATA_START_ROW + i;
-      const workingDays = calcDurationDays(r.training_start, r.training_end);
-      const weeks = Math.floor(workingDays / 5);
-      const remainingDays = workingDays % 5;
+      const first = group.records[0];
+
+      const validPeriods = group.records.filter(r => r.training_start && r.training_end);
+      const earliestStart = validPeriods.length
+        ? validPeriods.reduce((min, r) => (r.training_start < min ? r.training_start : min), validPeriods[0].training_start)
+        : null;
+      const latestEnd = validPeriods.length
+        ? validPeriods.reduce((max, r) => (r.training_end > max ? r.training_end : max), validPeriods[0].training_end)
+        : null;
+      const totalWorkingDays = validPeriods.reduce((sum, r) => sum + calcDurationDays(r.training_start, r.training_end), 0);
+      const weeks = Math.floor(totalWorkingDays / 5);
+      const remainingDays = totalWorkingDays % 5;
+
       const cellOpts = { align: "center", valign: "middle", wrap: false, sz: 14 };
 
       setExcelCell(ws, row, 1, i + 1, cellOpts);
-      setExcelCell(ws, row, 2, r.student_name || "", cellOpts);
-      setExcelCell(ws, row, 3, r.gender || "", cellOpts);
-      setExcelCell(ws, row, 4, r.nationality || "", cellOpts);
+      setExcelCell(ws, row, 2, first.student_name || "", cellOpts);
+      setExcelCell(ws, row, 3, first.gender || "", cellOpts);
+      setExcelCell(ws, row, 4, first.nationality || "", cellOpts);
 
-      setMergedExcelRange(ws, row, 5, 6, r.college || "", cellOpts);
+      setMergedExcelRange(ws, row, 5, 6, first.college || "", cellOpts);
 
-      setExcelCell(ws, row, 7, r.specialization || "", cellOpts);
-      setExcelCell(ws, row, 8, r.academic_stage || "", cellOpts);
-      setExcelCell(ws, row, 9, r.place_of_training || "", cellOpts);
-      setExcelCell(ws, row, 10, formatDateShort(r.training_start), cellOpts);
-      setExcelCell(ws, row, 11, formatDateShort(r.training_end), cellOpts);
+      setExcelCell(ws, row, 7, first.specialization || "", cellOpts);
+      setExcelCell(ws, row, 8, first.academic_stage || "", cellOpts);
+      setExcelCell(ws, row, 9, first.place_of_training || "", cellOpts);
+      setExcelCell(ws, row, 10, formatDateShort(earliestStart), cellOpts);
+      setExcelCell(ws, row, 11, formatDateShort(latestEnd), cellOpts);
       setExcelCell(ws, row, 12, weeks, cellOpts);
       setExcelCell(ws, row, 13, remainingDays, cellOpts);
       setExcelCell(ws, row, 14, "", cellOpts);
       ws.getRow(row).height = 22; // ارتفاع أكبر يلائم خط بحجم 14
     });
 
-    const lastRow = HEADER_ROW + rows.length;
+    const lastRow = HEADER_ROW + studentGroups.length;
 
     // -------- عرض الأعمدة، إعداد الصفحة، منطقة الطباعة --------
     // الأعمدة مُوسَّعة عمداً (راجع KASHF3_COLUMN_WIDTHS) لضمان ظهور أطول نص
