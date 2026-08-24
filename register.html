@@ -167,10 +167,18 @@
               <div class="error-msg">هذا الحقل مطلوب</div>
             </div>
 
-            <!-- حقل مكان التدريب: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب -->
+            <!-- حقل مكان التدريب: إلزامي، يُحفظ مع كل سجل قسم يُنشأ لهذا الطالب.
+                 قائمة منسدلة بخيارين ثابتين (طب / الإدارة) بالإضافة لخيار
+                 "أخرى" يُظهر حقل نص حر لكتابة مكان مخصّص عند اختياره. -->
             <div class="field" data-field="place_of_training">
               <label>مكان التدريب <span class="req">*</span></label>
-              <input type="text" id="place_of_training" placeholder="مثال: مستشفى إبراء" autocomplete="off">
+              <select id="place_of_training">
+                <option value="">اختر</option>
+                <option value="طب">طب</option>
+                <option value="الإدارة">الإدارة</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+              <input type="text" id="place_of_training_other" placeholder="اكتب مكان التدريب" autocomplete="off" style="display:none; margin-top:8px;">
               <div class="error-msg">هذا الحقل مطلوب</div>
             </div>
 
