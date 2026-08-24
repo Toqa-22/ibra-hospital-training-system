@@ -748,6 +748,26 @@ select:focus-visible,
   font-size:22px; margin:0 auto 14px;
 }
 .modal-box h4{ margin:0 0 8px; font-size:16px; font-weight:800; }
+.reason-prompt-box .reason-input{
+  width:100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background:#FBFCFE;
+  font-family: inherit;
+  font-size:13.5px;
+  color: var(--text);
+  resize:vertical;
+  text-align:right;
+  margin-bottom: 6px;
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+}
+.reason-prompt-box .reason-input:focus{
+  outline:none;
+  border-color: var(--primary);
+  background:#fff;
+  box-shadow: 0 0 0 4px var(--primary-light);
+}
 .modal-box p{ margin:0 0 20px; color: var(--text-muted); font-size:13.5px; }
 .modal-actions{ display:flex; gap:10px; }
 .modal-actions button{
